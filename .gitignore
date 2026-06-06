@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build output (regenerate with `npm run build`)
+dist/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# OMC session state
+.omc/
+
+# OS / editor
+.DS_Store
+*.log

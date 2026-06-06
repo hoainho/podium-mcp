@@ -1,0 +1,94 @@
+# Maestro Flow Script Cheat Sheet (bundled offline copy — captured 2026-06-05 from maestro mcp cheat_sheet)
+# This file demonstrates all available commands and parameters in the Maestro schema
+
+# ====== HEADER SECTION ======
+appId: com.example.myapp
+name: "Complete Maestro Cheat Sheet"
+env:
+  API_KEY: "your-api-key-here"
+  BASE_URL: "https://api.example.com"
+tags: [android, ios, regression, smoke-test]
+jsEngine: graaljs
+onFlowStart:
+  - runScript: { file: "./scripts/setup.js" }
+onFlowComplete:
+  - runScript: { file: "./scripts/cleanup.js" }
+---
+# launchApp: clearState/clearKeychain/stopApp(default true)/permissions {notifications|location|camera|all: allow|deny|unset}
+- launchApp: { clearState: true, clearKeychain: true, stopApp: true, permissions: { notifications: allow, all: unset } }
+# setPermissions (2.1.0+): permissions map; optional appId
+- setPermissions: { permissions: { notifications: allow, all: deny } }
+# addMedia: list of png/jpeg/jpg/gif/mp4 paths
+- addMedia: ["./assets/test_image.png"]
+# assertVisible / assertNotVisible: text|id (regex), index, enabled, checked, focused, selected, label, optional
+- assertVisible: "Login Button"
+- assertVisible: { text: "Sign In", id: "sign_in_button", index: 0, enabled: true, label: "Verify Sign In" }
+- assertNotVisible: "Loading Spinner"
+# assertTrue: JS condition string OR { condition, label }
+- assertTrue: "2 + 2 === 4"
+# eraseText: bare (all) or count
+- eraseText: 10
+# extendedWaitUntil: visible|notVisible matcher + timeout ms
+- extendedWaitUntil: { visible: "Submit Button", timeout: 5000 }
+# inputText: types regardless of focus; Android unicode unsupported
+- inputText: "example@email.com"
+# pressKey: enter, home, lock, backspace, volume up/down (all); back, power, tab (Android); Remote Dpad * (Android TV)
+- pressKey: "Enter"
+# retry: maxRetries 0-3 (default 1) + commands|file. Avoid wrapping large flows.
+- retry: { maxRetries: 3, commands: [ tapOn: { id: "maybe-late" } ] }
+# repeat: times N, or while: { visible: ... }
+- repeat: { times: 3, commands: [ tapOn: "Next" ] }
+- repeat: { while: { visible: "Load More" }, commands: [ tapOn: "Load More", waitForAnimationToEnd ] }
+# runFlow: file+env, or inline commands, with optional when: {visible|notVisible|platform|notPlatform|true:}
+- runFlow: { file: "login_flow.yaml", env: { USERNAME: "u" } }
+- runFlow: { when: { visible: "User Profile" }, commands: [ tapOn: "Logout" ] }
+# evalScript: inline JS, output scope via ${output.x}
+- evalScript: ${output.timestamp = Date.now()}
+# runScript: JS file + env + when
+- runScript: { file: "scripts/validate.js", when: { platform: "Android" } }
+# scroll / scrollUntilVisible: element, direction UP|DOWN|LEFT|RIGHT, timeout (default 20000), speed 0-100 (40), visibilityPercentage (100), centerElement
+- scroll
+- scrollUntilVisible: { element: "Load More", direction: DOWN, timeout: 10000 }
+# swipe: direction+duration, or start/end "%,%"|px, or from: {matcher}
+- swipe: { direction: LEFT, duration: 300 }
+- swipe: { start: "90%, 50%", end: "10%, 50%", duration: 500 }
+# tapOn / doubleTapOn / longPressOn: text|id (regex), enabled, below/above/leftOf/rightOf, containsChild,
+#   point "50%,50%", containsDescendants, retryTapIfNoChange (true), repeat, delay (100), waitToSettleTimeoutMs
+- tapOn: "Login"
+- tapOn: { text: "Submit", below: { text: "Terms and Conditions" }, retryTapIfNoChange: true }
+- doubleTapOn: "Image"
+- longPressOn: "Menu"
+# waitForAnimationToEnd: bare or { timeout }
+- waitForAnimationToEnd
+# startRecording / stopRecording
+- startRecording: "test_session.mp4"
+- stopRecording
+# setLocation (Android API 31+): latitude/longitude
+- setLocation: { latitude: 37.7749, longitude: -122.4194 }
+# setOrientation: PORTRAIT | LANDSCAPE_LEFT | LANDSCAPE_RIGHT | UPSIDE_DOWN (not Web)
+- setOrientation: PORTRAIT
+# setAirplaneMode / toggleAirplaneMode (Android only)
+- setAirplaneMode: enabled
+# travel: points ["lat,lon",...] + speed m/s
+- travel: { points: ["37.7749,-122.4194", "34.0522,-118.2437"], speed: 50 }
+# killApp (Android process death; iOS/Web = stopApp) / stopApp [appId]
+- killApp
+- stopApp
+# openLink: url string, or { link, autoVerify, browser }
+- openLink: "https://example.com"
+# copyTextFrom: matcher -> maestro.copiedText ; setClipboard (2.1.0+); pasteText
+- copyTextFrom: { id: "username_label" }
+- setClipboard: "text to copy"
+- pasteText
+# back (Android) / clearKeychain (iOS) / clearState [appId] / hideKeyboard (flaky iOS)
+- back
+- clearState
+- hideKeyboard
+# takeScreenshot: name or { path, cropOn (2.2.0+) }
+- takeScreenshot: "login_screen.png"
+# assertScreenshot (2.2.0+): name REQUIRED (never bare) or { path, cropOn, thresholdPercentage (95), label }
+- assertScreenshot: "reference_login"
+# AI commands (optional:true by default): assertWithAI {assertion}, assertNoDefectsWithAI, extractTextWithAI {query, outputVariable} -> ${aiOutput}
+- assertWithAI: { assertion: "Login and password text fields are visible." }
+# COMMON ARGS: every command accepts label: and optional: (default false; flow continues on failure when true)
+# CONDITIONS (when:): visible / notVisible / true: ${JS} / platform: Android|iOS|Web — multiple conditions are ANDed
