@@ -25,6 +25,7 @@ A podium is where a maestro stands — one place to conduct the whole orchestra.
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Prompt playbook](#prompt-playbook)
 - [Capability coverage](#capability-coverage-the-5-requirements)
 - [Tool reference](#tool-reference-28-tools)
 - [Documented limits](#documented-limits-by-design-not-bugs)
@@ -92,6 +93,14 @@ printf '%s\n' \
 ```
 
 Then call `podium_health` first to confirm which toolchain is available on the host.
+
+## Prompt playbook
+
+Copy-paste prompts for common React Native testing & debugging tasks — e2e flows,
+test cases, feature verification, bug fixing, and device control — live in
+[`prompts/`](prompts/). Each prompt names the podium tools it drives and was
+validated against a real simulator. Start with
+[`prompts/README.md`](prompts/README.md).
 
 ## Capability coverage (the 5 requirements)
 
