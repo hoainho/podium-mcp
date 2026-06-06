@@ -13,6 +13,12 @@ A single stdio endpoint with **28 tools** for iOS-simulator device control, UI a
 [![Tests](https://img.shields.io/badge/tests-61%20passing-brightgreen.svg)](#development)
 [![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
 
+<br/>
+
+<img src="assets/demo.gif" alt="podium-mcp driving an iOS simulator — launch, swipe, tap, all recorded via the record_* tools" width="280" />
+
+<sub><i>Recorded by podium itself (`record_start` → `run_flow` → `record_stop`) on a live iOS simulator.</i></sub>
+
 </div>
 
 ---
