@@ -4,7 +4,7 @@
 
 **One MCP server to conduct the whole mobile orchestra.**
 
-Merges [mobile-mcp](https://github.com/mobile-next/mobile-mcp), [Maestro MCP](https://maestro.mobile.dev), and [react-native-debugger-mcp](https://github.com/twodoorsdev/react-native-debugger-mcp) into a single stdio endpoint — **28 tools** for iOS-simulator device control, UI automation, and React Native debugging.
+A single stdio endpoint with **28 tools** for iOS-simulator device control, UI automation, end-to-end flows, and React Native debugging — one connection instead of several.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
@@ -17,7 +17,7 @@ Merges [mobile-mcp](https://github.com/mobile-next/mobile-mcp), [Maestro MCP](ht
 
 ---
 
-A podium is where a maestro stands — one place to conduct the whole orchestra. This MCP server unifies three capability sets into a single stdio endpoint: **device management** (mobile-mcp parity, simctl/adb), **UI inspection + interaction and declarative flows** (Maestro engine), and **React Native debugging** (Metro logs + crash reports, react-native-debugger parity). Rather than wiring three separate MCP servers into every client config, `podium-mcp` exposes all of them behind one connection, with a shared exec layer, consistent error handling, and a single health-check tool to confirm what toolchain is available on the host machine.
+A podium is where a maestro stands — one place to conduct the whole orchestra. This MCP server unifies three capability sets into a single stdio endpoint: **device management** (via `simctl`, with graceful `adb` support), **UI inspection, interaction, and declarative end-to-end flows** (driven through the Maestro flow engine), and **React Native debugging** (Metro console logs over CDP + crash reports). Rather than wiring several separate MCP servers into every client config, `podium-mcp` exposes everything behind one connection, with a shared exec layer, consistent error handling, and a single health-check tool to confirm what toolchain is available on the host machine.
 
 ## Table of contents
 
@@ -30,9 +30,9 @@ A podium is where a maestro stands — one place to conduct the whole orchestra.
 - [Documented limits](#documented-limits-by-design-not-bugs)
 - [Architecture](#architecture)
 - [Development](#development)
-- [Source-MCP parity map](#source-mcp-parity-map)
+- [Full tool catalog](#full-tool-catalog)
 - [Verified end-to-end](#verified-end-to-end)
-- [Acknowledgments](#acknowledgments)
+- [Design ideas](#design-ideas)
 - [Contributing](#contributing)
 - [Security](#security)
 - [License](#license)
@@ -101,7 +101,7 @@ Then call `podium_health` first to confirm which toolchain is available on the h
 | 2 | Control device | `app_launch/terminate/install/uninstall`, `tap_on`, `swipe`, `input_text`, `press_key`, `set_location`, `orientation_set`, `open_url` | ✅ tap, key, location, orientation all pass |
 | 3 | Screenshot / capture | `screenshot`, `record_start`/`record_stop` (video) | ✅ PNG + QuickTime `.mp4` |
 | 4 | Make e2e | `run_flow`, `inspect_screen`, `cheat_sheet` + gestures | ✅ flow pass with per-step results |
-| 5 | All things from the 3 MCPs | all 28 below — full mobile-mcp + Maestro + react-native-debugger parity | ✅ see [`docs/tool-parity.md`](docs/tool-parity.md) |
+| 5 | Everything behind one connection | all 28 tools below — device, automation, capture, and debugging in a single endpoint | ✅ see [tool catalog](docs/tool-parity.md) |
 
 ## Tool reference (28 tools)
 
@@ -138,7 +138,7 @@ Then call `podium_health` first to confirm which toolchain is available on the h
 
 ### Ephemeral-flow interaction model
 
-Imperative gestures (`tap_on`, `input_text`, `swipe`, `press_key`) are implemented by generating a minimal Maestro flow with `launchApp: { stopApp: false }` — the app is foregrounded **without restarting**, so sequential interactions preserve app state (mobile-mcp imperative parity through a single Maestro engine).
+Imperative gestures (`tap_on`, `input_text`, `swipe`, `press_key`) are implemented by generating a minimal Maestro flow with `launchApp: { stopApp: false }` — the app is foregrounded **without restarting**, so sequential interactions preserve app state. One flow engine backs both declarative flows and one-off gestures.
 
 ### Known idb flakiness — retry policy
 
@@ -183,9 +183,9 @@ Standards: TypeScript strict, **no `as any` / `@ts-ignore`**, **no shell executi
 (all commands via `lib/exec.ts`), tools return structured errors instead of throwing.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and the "add a new tool" checklist.
 
-## Source-MCP parity map
+## Full tool catalog
 
-See [`docs/tool-parity.md`](docs/tool-parity.md) for the authoritative tool-by-tool mapping against `@mobilenext/mobile-mcp`, `maestro mcp`, and `@twodoorsdev/react-native-debugger-mcp`, including deferred v2 items (Maestro Cloud, viewer).
+See [`docs/tool-parity.md`](docs/tool-parity.md) for the authoritative tool-by-tool reference — every tool with its parameters, backing engine, and fallback behavior, plus the items deferred to a future version (cloud execution, live viewer).
 
 ## Verified end-to-end
 
@@ -193,16 +193,24 @@ See [`docs/e2e-demo.md`](docs/e2e-demo.md) for a real transcript against a boote
 
 > **Platform note:** macOS + iOS Simulator is the primary target. Android degrades gracefully — tools check for `adb` at runtime and return informative errors when the Android SDK is absent rather than failing hard.
 
-## Acknowledgments
+## Design ideas
 
-podium-mcp stands on the shoulders of three excellent projects, whose tool
-surfaces it consolidates (it reimplements parity via the `simctl` / `maestro` /
-Metro CDP interfaces — it does not vendor their code):
+podium-mcp is built around a few deliberate principles:
 
-- **[mobile-mcp](https://github.com/mobile-next/mobile-mcp)** — device/app control and gesture model
-- **[Maestro](https://maestro.mobile.dev)** — the UI-flow engine powering interaction, inspection, and `run_flow`
-- **[react-native-debugger-mcp](https://github.com/twodoorsdev/react-native-debugger-mcp)** — Metro CDP log capture
-- Built on the **[Model Context Protocol](https://modelcontextprotocol.io)** TypeScript SDK
+- **One podium, one connection.** A single server fronts every mobile capability — device, UI, flows, capture, and debugging — so an agent configures one endpoint and discovers all 28 tools at once, instead of stitching together several servers.
+- **Safe by construction.** Every external command runs through an `execFile` layer with an explicit argument array — never a shell string — so tool inputs (udids, paths, selectors, flow YAML) can't be interpreted as commands.
+- **Never crash the conductor.** Tools return structured results and errors instead of throwing; one bad call can't take the server down.
+- **Degrade, don't fail.** A missing toolchain (e.g. Android's `adb`) yields an informative result rather than a hard error.
+- **Resilient automation.** Flaky simulator drivers are retried with backoff, and every result reports exactly what happened (including the retry count).
+
+### How to use it, in order
+
+1. **`podium_health`** — confirm `xcrun` and `maestro` are available on the host.
+2. **`device_list`** — pick a booted simulator `udid`.
+3. **Read state** — `app_list`, `app_state`, `screen_size`, `orientation_get`.
+4. **Drive the device** — `app_launch`, then `tap_on` / `input_text` / `swipe` / `press_key`, plus `set_location` and `orientation_set`.
+5. **Author end-to-end checks** — `inspect_screen` to discover element text/ids, then `run_flow` (inline YAML or a `.maestro` file).
+6. **Capture & debug** — `screenshot` or `record_start` → `record_stop` for video; `metro_logs` for live RN console output; `crash_list` / `crash_get` for diagnostics.
 
 ## Contributing
 
