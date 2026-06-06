@@ -15,9 +15,9 @@ A single stdio endpoint with **28 tools** for iOS-simulator device control, UI a
 
 <br/>
 
-<img src="assets/demo.gif" alt="podium-mcp guide — what it does (launch · inspect · tap · swipe · run_flow · screenshot · record · logs) and driving a live iOS simulator" width="300" />
+<img src="assets/demo.gif" alt="podium-mcp agent session — one prompt drives device_list, app_launch, inspect_screen, tap_on and screenshot on a live iOS simulator, then reports the result" width="300" />
 
-<sub><i>A quick guide — recorded by podium itself (`record_start` → `run_flow` → `record_stop`) on a live iOS simulator.</i></sub>
+<sub><i>One prompt → podium runs the tools live → the simulator reacts → result. Device footage recorded by podium itself (`record_start` → `record_stop`).</i></sub>
 
 </div>
 
