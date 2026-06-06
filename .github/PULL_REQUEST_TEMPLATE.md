@@ -4,7 +4,7 @@
 
 ## Changes
 
-<!-- Bullet the notable changes. New tool? Update the README tool table + docs/tool-parity.md. -->
+<!-- Bullet the notable changes. New tool? Update the README tool table + docs/tool-catalog.md. -->
 
 -
 

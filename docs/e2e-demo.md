@@ -31,7 +31,7 @@ adb absent → reported, not fatal.
 { "installed": true, "running": true }
 ```
 
-## 5. metro_apps (react-native-debugger parity)
+## 5. metro_apps
 
 ```json
 [ { "id": "b499ff3f…-1", "description": "React Native Bridgeless [C++ connection]",
@@ -111,10 +111,10 @@ debug-artifact path instead of masking it.
 - `run_flow` inline (launchApp stopApp:false + assertVisible "The Win Zone") → passed, 9599ms, per-step results returned
 - `inspect_screen` → native hierarchy (root a11y "The Win Zone")
 
-## #5 All things from the 3 MCPs (parity)
-- mobile-mcp: device/app/screenshot/gesture/orientation/recording/crash — all present
-- Maestro: run_flow / inspect_screen / cheat_sheet — present
-- react-native-debugger: `metro_apps` (finds thewinzone bridge), `metro_logs` (real RN Firebase deprecation warnings captured via CDP) — present
+## #5 Everything behind one connection
+- Device / app / screenshot / gesture / orientation / recording / crash — all present
+- Flows: `run_flow` / `inspect_screen` / `cheat_sheet` — present
+- RN debugging: `metro_apps` (finds the app bridge), `metro_logs` (real RN Firebase deprecation warnings captured via CDP) — present
 
 ## Harness note
 `record_start`+`record_stop` fired in one un-awaited batch raced (record_stop saw empty registry). Re-run with a sequential one-process driver (await each response) → full lifecycle passed. Real MCP clients serialize, so this is a test-harness artifact, now documented as a usage constraint in README.

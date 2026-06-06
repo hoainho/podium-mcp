@@ -36,7 +36,7 @@ src/
     recording.ts    # detached screen recording lifecycle
   tools/            # one file per tool group (health, device, screen, flow, debug)
 assets/             # bundled offline Maestro cheat sheet
-docs/               # tool-parity map + e2e transcript
+docs/               # tool catalog + e2e transcript
 ```
 
 ## Coding standards (enforced)
@@ -53,7 +53,7 @@ docs/               # tool-parity map + e2e transcript
 1. Add the backing helper to the right `lib/*.ts` module (typed, never throws).
 2. Register the tool in the matching `tools/*.ts` `register*Tools(server)` with a `zod` schema and a clear description.
 3. Add unit tests (mock the exec/`fetch`/`WebSocket` layer — see existing `*.test.ts`).
-4. Update the tool table and parity map in `README.md` / `docs/tool-parity.md`.
+4. Update the tool table in `README.md` and the catalog in `docs/tool-catalog.md`.
 5. `npm run build && npm test` green, then add a manual-verification note if it touches a device.
 
 ## Tests

@@ -14,9 +14,4 @@ labels: enhancement
 <!-- If it's a new tool: proposed name, params, and which backing engine
      (simctl / Maestro / Metro CDP / adb) it would use. -->
 
-## Source-MCP parity
-
-<!-- Does one of mobile-mcp / Maestro MCP / react-native-debugger MCP already
-     do this? Link it if so. -->
-
 ## Alternatives considered

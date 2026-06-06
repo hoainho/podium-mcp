@@ -101,7 +101,7 @@ Then call `podium_health` first to confirm which toolchain is available on the h
 | 2 | Control device | `app_launch/terminate/install/uninstall`, `tap_on`, `swipe`, `input_text`, `press_key`, `set_location`, `orientation_set`, `open_url` | ✅ tap, key, location, orientation all pass |
 | 3 | Screenshot / capture | `screenshot`, `record_start`/`record_stop` (video) | ✅ PNG + QuickTime `.mp4` |
 | 4 | Make e2e | `run_flow`, `inspect_screen`, `cheat_sheet` + gestures | ✅ flow pass with per-step results |
-| 5 | Everything behind one connection | all 28 tools below — device, automation, capture, and debugging in a single endpoint | ✅ see [tool catalog](docs/tool-parity.md) |
+| 5 | Everything behind one connection | all 28 tools below — device, automation, capture, and debugging in a single endpoint | ✅ see [tool catalog](docs/tool-catalog.md) |
 
 ## Tool reference (28 tools)
 
@@ -168,7 +168,7 @@ src/
     recording.ts    # detached screen recording lifecycle
   tools/            # one file per tool group (health, device, screen, flow, debug)
 assets/             # bundled offline Maestro cheat sheet
-docs/               # tool-parity map + e2e transcript
+docs/               # tool catalog + e2e transcript
 ```
 
 ## Development
@@ -185,7 +185,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and the "add a new too
 
 ## Full tool catalog
 
-See [`docs/tool-parity.md`](docs/tool-parity.md) for the authoritative tool-by-tool reference — every tool with its parameters, backing engine, and fallback behavior, plus the items deferred to a future version (cloud execution, live viewer).
+See [`docs/tool-catalog.md`](docs/tool-catalog.md) for the authoritative tool-by-tool reference — every tool with its parameters, backing engine, and fallback behavior, plus the items deferred to a future version (cloud execution, live viewer).
 
 ## Verified end-to-end
 
