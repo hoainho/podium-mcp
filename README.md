@@ -2,7 +2,7 @@
 
 # 🎙️ podium-mcp
 
-**One MCP server to conduct the whole mobile orchestra.**
+**One baton. Every instrument.**
 
 A single stdio endpoint with **28 tools** for iOS-simulator device control, UI automation, end-to-end flows, and React Native debugging — one connection instead of several.
 
