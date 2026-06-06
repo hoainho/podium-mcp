@@ -2,10 +2,37 @@
   "name": "podium-mcp",
   "version": "0.1.0",
   "private": true,
+  "description": "Unified mobile E2E MCP server — merges mobile-mcp + Maestro + react-native-debugger into one stdio server (28 tools) for iOS-simulator device control, UI automation, and React Native debugging.",
   "type": "module",
+  "license": "MIT",
+  "author": "hoainho <nhoxtvt@gmail.com>",
+  "homepage": "https://github.com/hoainho/podium-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/hoainho/podium-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hoainho/podium-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "maestro",
+    "mobile-mcp",
+    "react-native",
+    "ios-simulator",
+    "e2e",
+    "automation",
+    "simctl",
+    "metro"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/index.js"
   },
   "dependencies": {
