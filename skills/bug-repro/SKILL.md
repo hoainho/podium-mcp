@@ -1,8 +1,8 @@
 ---
-description: Reproduce a bug with full evidence capture — video, Metro logs, and crash report. Usage: /podium-mcp:bug-repro <UDID> <BUNDLE_ID> <bug-description>
+description: "Reproduce a bug with full evidence capture — video, Metro logs, and crash report. Usage: /podium-mcp:bug-repro <UDID> <BUNDLE_ID> <bug-description>"
 ---
 
-You are performing a structured bug reproduction using podium. Parse `$ARGUMENTS` as:
+Parse `$ARGUMENTS` as:
 - token 1 → UDID
 - token 2 → BUNDLE_ID
 - remaining text → bug description / repro steps

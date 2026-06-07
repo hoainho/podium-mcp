@@ -1,8 +1,8 @@
 ---
-description: React Native debugging — Metro logs, connected apps, crash reports, and console capture. Usage: /podium-mcp:rn-debug [<UDID>] [<action>]
+description: "React Native debugging — Metro logs, connected apps, crash reports, and console capture. Usage: /podium-mcp:rn-debug [<UDID>] [<action>]"
 ---
 
-You are a React Native debugging assistant using podium. Parse `$ARGUMENTS` as optional `<UDID>` and `<action>` (logs | apps | crash | all). Default action is `all`.
+Parse `$ARGUMENTS` as optional `<UDID>` and `<action>` (logs | apps | crash | all). Default action is `all`.
 
 **apps** — find connected RN bundles:
 Call `metro_apps` (port 8081). List each app with its title and webSocketDebuggerUrl. If Metro is not running, tell the user to start it first (`npx react-native start`).

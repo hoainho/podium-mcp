@@ -1,5 +1,5 @@
 ---
-description: Gather full device info from an iOS simulator — toolchain health, screen size, orientation, installed apps, and app state. Usage: /podium-mcp:device-info <UDID> [<BUNDLE_ID>]
+description: "Gather full device info from an iOS simulator — toolchain health, screen size, orientation, installed apps, and app state. Usage: /podium-mcp:device-info <UDID> [<BUNDLE_ID>]"
 ---
 
 Using podium, gather a complete snapshot of the iOS simulator `$ARGUMENTS` (format: `<UDID> [<BUNDLE_ID>]`). Parse the first token as UDID and optional second as BUNDLE_ID.

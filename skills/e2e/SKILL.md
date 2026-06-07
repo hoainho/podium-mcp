@@ -1,8 +1,8 @@
 ---
-description: Run or author a Maestro E2E flow on an iOS simulator. Usage: /podium-mcp:e2e <UDID> <BUNDLE_ID> [<flow-path-or-description>]
+description: "Run or author a Maestro E2E flow on an iOS simulator. Usage: /podium-mcp:e2e <UDID> <BUNDLE_ID> [<flow-path-or-description>]"
 ---
 
-You are running an end-to-end Maestro flow via podium. Parse `$ARGUMENTS` as:
+Parse `$ARGUMENTS` as:
 - token 1 → UDID
 - token 2 → BUNDLE_ID
 - remaining text → either a file path (ends in .yaml/.yml) or a plain-language description of the journey to author
