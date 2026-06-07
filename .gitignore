@@ -1,8 +1,7 @@
 # Dependencies
 node_modules/
 
-# Build output (regenerate with `npm run build`)
-dist/
+# Build output — dist/ is committed for git-native plugin distribution
 *.tsbuildinfo
 
 # Test / coverage

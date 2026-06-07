@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { access, constants } from "node:fs/promises";
 import { resolve } from "node:path";
+import { homedir } from "node:os";
 
 const execFileAsync = promisify(execFile);
 
@@ -44,7 +45,7 @@ export async function run(
  * Add to this list when integrating new tools.
  */
 const EXTRA_PATHS: string[] = [
-  "/Users/nhonh/.maestro/bin",
+  `${homedir()}/.maestro/bin`,
   "/usr/local/bin",
   "/opt/homebrew/bin",
 ];

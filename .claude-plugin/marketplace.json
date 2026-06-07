@@ -1,0 +1,37 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "podium",
+  "description": "Podium MCP — iOS simulator device control, Maestro E2E flows, and React Native debugging tools for Claude Code.",
+  "owner": {
+    "name": "hoainho",
+    "email": "nhoxtvt@gmail.com",
+    "url": "https://github.com/hoainho"
+  },
+  "plugins": [
+    {
+      "name": "podium-mcp",
+      "displayName": "Podium MCP",
+      "description": "Unified mobile E2E MCP server — 28 tools for iOS-simulator device control, UI automation, end-to-end Maestro flows, and React Native debugging.",
+      "author": {
+        "name": "hoainho",
+        "url": "https://github.com/hoainho"
+      },
+      "category": "development",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/hoainho/podium-mcp",
+        "ref": "main"
+      },
+      "homepage": "https://github.com/hoainho/podium-mcp",
+      "keywords": [
+        "mcp",
+        "maestro",
+        "mobile-automation",
+        "react-native",
+        "ios-simulator",
+        "e2e",
+        "simctl"
+      ]
+    }
+  ]
+}

@@ -11,7 +11,7 @@ export async function resolveMaestro(): Promise<string | null> {
     return which.stdout;
   }
   // Known install location
-  const known = "/Users/nhonh/.maestro/bin/maestro";
+  const known = `${os.homedir()}/.maestro/bin/maestro`;
   const check = await run("test", ["-x", known]);
   if (check.code === 0) {
     return known;
@@ -24,6 +24,7 @@ export function maestroEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
     JAVA_HOME:
+      process.env.JAVA_HOME ??
       "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
   };
 }

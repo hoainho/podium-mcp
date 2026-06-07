@@ -1,7 +1,6 @@
 {
   "name": "podium-mcp",
   "version": "0.1.0",
-  "private": true,
   "description": "Unified mobile E2E MCP server — one stdio server (28 tools) for iOS-simulator device control, UI automation, end-to-end flows, and React Native debugging.",
   "type": "module",
   "license": "MIT",
@@ -25,6 +24,15 @@
     "automation",
     "simctl",
     "metro"
+  ],
+  "bin": {
+    "podium-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    ".claude-plugin",
+    ".mcp.json",
+    "skills"
   ],
   "engines": {
     "node": ">=22"

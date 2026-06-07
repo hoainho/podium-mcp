@@ -1,0 +1,22 @@
+{
+  "name": "podium-mcp",
+  "description": "Unified mobile E2E MCP server — device control, UI automation, end-to-end flows, and React Native debugging for iOS simulators.",
+  "version": "0.1.0",
+  "author": {
+    "name": "hoainho",
+    "email": "nhoxtvt@gmail.com",
+    "url": "https://github.com/hoainho"
+  },
+  "homepage": "https://github.com/hoainho/podium-mcp",
+  "repository": "https://github.com/hoainho/podium-mcp",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "maestro",
+    "mobile-automation",
+    "react-native",
+    "ios-simulator",
+    "e2e",
+    "simctl"
+  ]
+}

@@ -64,7 +64,30 @@ collapses that into **one** server with:
 - *(optional)* Android SDK + `adb` — adb paths degrade gracefully when absent
 - *(optional)* a running Metro bundler for the `metro_*` debugging tools
 
-## Installation
+## Claude Code plugin
+
+Install podium-mcp as a Claude Code plugin — no manual config needed. One-time marketplace setup, then install:
+
+```
+/plugin marketplace add github:hoainho/podium-mcp
+/plugin install podium-mcp@podium
+```
+
+Once installed, four skills are available directly in Claude Code:
+
+| Skill | Invoke | What it does |
+|---|---|---|
+| Device info | `/podium-mcp:device-info <UDID> [<BUNDLE_ID>]` | Health check, screen size, orientation, app list |
+| E2E flow | `/podium-mcp:e2e <UDID> <BUNDLE_ID> [path or description]` | Run or author a Maestro flow |
+| Bug repro | `/podium-mcp:bug-repro <UDID> <BUNDLE_ID> <description>` | Video + logs + crash evidence capture |
+| RN debug | `/podium-mcp:rn-debug [UDID] [logs\|apps\|crash\|all]` | Metro logs, connected apps, crash reports |
+
+The plugin auto-starts the MCP server (all 28 tools) when enabled. No `.mcp.json` edits required.
+
+> **To submit this plugin to the Claude community marketplace** (for discovery without the `marketplace add` step):
+> [claude.ai/settings/plugins/submit](https://claude.ai/settings/plugins/submit)
+
+## Manual installation
 
 ```bash
 git clone git@github.com:hoainho/podium-mcp.git
