@@ -1,17 +1,36 @@
 import { run } from "./exec.js";
-import { writeFile, mkdtemp, rm } from "node:fs/promises";
+import { writeFile, mkdtemp, rm, access, constants } from "node:fs/promises";
 import { join } from "node:path";
 import os from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
-/** Full path to the maestro binary, or null if not resolvable. */
+/**
+ * Private execFile, INDEPENDENT of exec.run — used only for JAVA_HOME discovery.
+ * Kept separate so unit tests that mock `exec.run` (and count its calls) are not
+ * polluted by JAVA_HOME resolution. Never throws.
+ */
+const execFileLocal = promisify(execFile);
+
+/**
+ * Full path to the maestro binary, or null if not resolvable.
+ * Resolution order: explicit env override → PATH (`which`) → `$HOME/.maestro/bin`.
+ * No hardcoded per-user paths (portable across machines / CI).
+ */
 export async function resolveMaestro(): Promise<string | null> {
+  // Explicit override wins (set PODIUM_MAESTRO_BIN or MAESTRO_BIN to an absolute path)
+  const override = process.env.PODIUM_MAESTRO_BIN || process.env.MAESTRO_BIN;
+  if (override) {
+    const ok = await run("test", ["-x", override]);
+    if (ok.code === 0) return override;
+  }
   // Fast path: on PATH
   const which = await run("which", ["maestro"]);
   if (which.code === 0 && which.stdout.length > 0) {
     return which.stdout;
   }
-  // Known install location
-  const known = `${os.homedir()}/.maestro/bin/maestro`;
+  // Standard install location, relative to the current user's home
+  const known = join(os.homedir(), ".maestro", "bin", "maestro");
   const check = await run("test", ["-x", known]);
   if (check.code === 0) {
     return known;
@@ -19,13 +38,53 @@ export async function resolveMaestro(): Promise<string | null> {
   return null;
 }
 
-/** Returns a process env with JAVA_HOME set for the Maestro JVM. */
-export function maestroEnv(): NodeJS.ProcessEnv {
+/** Cached JAVA_HOME resolution: undefined = not yet resolved, null = none found. */
+let cachedJavaHome: string | null | undefined;
+
+/**
+ * Resolve a JAVA_HOME for the Maestro JVM without hardcoding a per-user path.
+ * Order: existing $JAVA_HOME → macOS `/usr/libexec/java_home -v 21` → Homebrew
+ * openjdk@21 prefix (if present). Returns undefined when none can be found, in
+ * which case Maestro relies on the ambient environment. Cached after first call.
+ */
+export async function resolveJavaHome(): Promise<string | undefined> {
+  if (cachedJavaHome !== undefined) return cachedJavaHome ?? undefined;
+
+  if (process.env.JAVA_HOME && process.env.JAVA_HOME.length > 0) {
+    cachedJavaHome = process.env.JAVA_HOME;
+    return cachedJavaHome;
+  }
+  // macOS: ask java_home for a v21 JDK (Maestro requires Java 21+)
+  try {
+    const { stdout } = await execFileLocal("/usr/libexec/java_home", ["-v", "21"], {
+      timeout: 5000,
+    });
+    const p = stdout.trim();
+    if (p.length > 0) {
+      cachedJavaHome = p;
+      return p;
+    }
+  } catch {
+    // java_home absent or no matching JDK — fall through
+  }
+  // Homebrew fallback
+  const brew = "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home";
+  try {
+    await access(join(brew, "bin", "java"), constants.X_OK);
+    cachedJavaHome = brew;
+    return brew;
+  } catch {
+    cachedJavaHome = null;
+    return undefined;
+  }
+}
+
+/** Returns a process env with JAVA_HOME set for the Maestro JVM (when resolvable). */
+export async function maestroEnv(): Promise<NodeJS.ProcessEnv> {
+  const javaHome = await resolveJavaHome();
   return {
     ...process.env,
-    JAVA_HOME:
-      process.env.JAVA_HOME ??
-      "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+    ...(javaHome ? { JAVA_HOME: javaHome } : {}),
   };
 }
 
@@ -43,6 +102,17 @@ export interface FlowResult {
   rawOutput: string;
   durationMs: number;
   retries: number;
+}
+
+/**
+ * Kills idb_companion and waits 3 seconds to allow a clean restart.
+ * Called as a last-resort after all idb-flakiness retries are exhausted.
+ * Never throws.
+ */
+export async function proactiveIdbRestart(): Promise<void> {
+  await run("pkill", ["-9", "-f", "idb_companion"]).catch(() => undefined);
+  process.stderr.write("proactiveIdbRestart: killed idb_companion, waiting 3s\n");
+  await new Promise<void>((resolve) => setTimeout(resolve, 3000));
 }
 
 /**
@@ -125,7 +195,7 @@ export async function runMaestroFlow(opts: RunFlowOpts): Promise<FlowResult> {
     );
   }
 
-  const envOverride = { ...maestroEnv(), ...(env ?? {}) };
+  const envOverride = { ...(await maestroEnv()), ...(env ?? {}) };
   const timeout = timeoutMs ?? 120_000;
 
   let tmpDir: string | null = null;
@@ -175,17 +245,27 @@ export async function runMaestroFlow(opts: RunFlowOpts): Promise<FlowResult> {
     let result = await run(binary, args, { timeout, env: envOverride });
     let retries = 0;
 
+    let idbFlakyEncountered = false;
     for (const delay of RETRY_DELAYS_MS) {
       if (result.code === 0) break;
 
       const combined = result.stdout + result.stderr;
       if (IDB_FLAKY_RE.test(combined)) {
+        idbFlakyEncountered = true;
         retries++;
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
         result = await run(binary, args, { timeout, env: envOverride });
       } else {
         break;
       }
+    }
+
+    // If all retries were exhausted due to idb flakiness, do one proactive
+    // idb_companion restart and make a final attempt.
+    if (result.code !== 0 && idbFlakyEncountered) {
+      await proactiveIdbRestart();
+      retries++;
+      result = await run(binary, args, { timeout, env: envOverride });
     }
 
     const combined = result.stdout + result.stderr;
@@ -223,7 +303,7 @@ export async function getHierarchy(
 
   const result = await run(binary, ["--udid", udid, "hierarchy"], {
     timeout: 30_000,
-    env: maestroEnv(),
+    env: await maestroEnv(),
   });
 
   const combined = result.stdout + result.stderr;

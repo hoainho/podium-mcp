@@ -6,7 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { commandExists } from "../lib/exec.js";
 import { run } from "../lib/exec.js";
 import {
-  listDevices,
+  listDevicesCached,
   boot,
   install,
   launch,
@@ -19,8 +19,12 @@ import {
   measureScreen,
 } from "../lib/simctl.js";
 import { startRecording, stopRecording } from "../lib/recording.js";
+import { getBackend } from "../lib/native.js";
 
 import { errorResult, okResult } from "../lib/result.js";
+
+/** adb presence rarely changes mid-session — probe once. */
+let adbPresentCache: boolean | undefined;
 
 export function registerDeviceTools(server: McpServer): void {
   // ─── device_list ────────────────────────────────────────────────────────────
@@ -30,8 +34,10 @@ export function registerDeviceTools(server: McpServer): void {
     {},
     async () => {
       const [iosResult, adbPresent] = await Promise.all([
-        listDevices(),
-        commandExists("adb"),
+        listDevicesCached(),
+        adbPresentCache !== undefined
+          ? Promise.resolve(adbPresentCache)
+          : commandExists("adb").then((v) => (adbPresentCache = v)),
       ]);
 
       if (!iosResult.ok) {
@@ -66,11 +72,17 @@ export function registerDeviceTools(server: McpServer): void {
   // ─── device_boot ────────────────────────────────────────────────────────────
   server.tool(
     "device_boot",
-    "Boots an iOS simulator by UDID. Waits up to 30 seconds for the boot command to complete.",
+    "Boots an iOS simulator by UDID. Waits up to 30 seconds for the boot command to complete. Idempotent: booting an already-booted device returns ok with alreadyBooted:true.",
     { udid: z.string().describe("Simulator UDID (from device_list)") },
     async ({ udid }) => {
       const result = await boot(udid);
       if (!result.ok) {
+        const combined = `${result.stderr} ${result.stdout}`;
+        // Booting an already-booted device is a no-op success (simctl code 149 /
+        // "Unable to boot device in current state: Booted").
+        if (/current state: Booted/i.test(combined) || /already booted/i.test(combined)) {
+          return okResult({ ok: true, udid, alreadyBooted: true });
+        }
         return errorResult(`boot failed (code ${result.code}): ${result.stderr || result.stdout}`);
       }
       return okResult({ ok: true, udid, stdout: result.stdout });
@@ -245,11 +257,21 @@ export function registerDeviceTools(server: McpServer): void {
   // ─── orientation_get ──────────────────────────────────────────────────────────
   server.tool(
     "orientation_get",
-    "Returns the current orientation of a booted iOS simulator, derived from the screenshot aspect ratio (iOS simulators have no direct orientation query API).",
+    "Returns the current orientation of a booted iOS simulator. Queries the native backend (mobilecli) when available for an exact answer; otherwise derives it from the screenshot aspect ratio.",
     {
       udid: z.string().describe("Simulator UDID"),
     },
     async ({ udid }) => {
+      // Native fast/exact path: mobilecli `device orientation get`.
+      const be = await getBackend();
+      if (be?.getOrientation) {
+        const native = await be.getOrientation(udid);
+        if (native) {
+          return okResult({ orientation: native, basis: `${be.name} (native query)` });
+        }
+      }
+
+      // Fallback: infer from screenshot aspect ratio.
       const result = await measureScreen(udid);
       if (!result.ok) {
         return errorResult(`orientation_get failed: ${result.error ?? "unknown error"}`);
@@ -261,7 +283,7 @@ export function registerDeviceTools(server: McpServer): void {
         orientation,
         widthPx,
         heightPx,
-        basis: "screenshot-aspect-ratio (iOS sim has no direct orientation query)",
+        basis: "screenshot-aspect-ratio (no native orientation query available)",
       });
     }
   );

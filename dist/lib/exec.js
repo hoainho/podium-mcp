@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { access, constants } from "node:fs/promises";
 import { resolve } from "node:path";
-import { homedir } from "node:os";
+import os from "node:os";
 const execFileAsync = promisify(execFile);
 /**
  * Run a command with args. Never throws — errors are captured in the result.
@@ -30,10 +30,12 @@ export async function run(cmd, args, opts) {
 }
 /**
  * Known extra PATH locations to probe when `which` finds nothing.
- * Add to this list when integrating new tools.
+ * Derived from the current user's home (portable across machines / CI) plus
+ * the standard Homebrew prefixes. Add to this list when integrating new tools.
  */
 const EXTRA_PATHS = [
-    `${homedir()}/.maestro/bin`,
+    resolve(os.homedir(), ".maestro", "bin"),
+    resolve(os.homedir(), ".local", "bin"),
     "/usr/local/bin",
     "/opt/homebrew/bin",
 ];

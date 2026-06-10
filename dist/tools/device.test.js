@@ -80,6 +80,8 @@ describe("simctl helpers", () => {
 describe("device tools via fake server", () => {
     beforeEach(() => {
         vi.restoreAllMocks();
+        // device_list caches results for 3 s — reset so each test sees fresh mocks
+        simctl._resetDeviceCache();
     });
     async function buildServer() {
         // Dynamic import so vi.mock hoisting can intercept exec & simctl before registration

@@ -168,7 +168,7 @@ describe("runMaestroFlow — idb retry", () => {
     });
 
     expect(result.passed).toBe(false);
-    expect(result.retries).toBe(2);
+    expect(result.retries).toBe(3);
   });
 });
 
@@ -429,6 +429,12 @@ describe("cheat_sheet", () => {
 describe("orientation_set yaml generation", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // These tests assert the Maestro-fallback yaml path; force native off so a
+    // real mobilecli binary on disk doesn't short-circuit to the native backend.
+    process.env.PODIUM_DISABLE_NATIVE = "1";
+  });
+  afterEach(() => {
+    delete process.env.PODIUM_DISABLE_NATIVE;
   });
 
   async function buildScreenServer() {

@@ -37,6 +37,31 @@ export async function listDevices() {
         return { ok: false, devices: [], error: `JSON parse failed: ${String(e)}` };
     }
 }
+// ─── Device-list cache ───────────────────────────────────────────────────────
+let deviceCache = null;
+/**
+ * listDevices with a short TTL cache. Device boot states change rarely enough
+ * that a 3 s window is safe, and it makes repeat calls (and the first call,
+ * when prefetchDevices ran at server start) near-instant.
+ */
+export async function listDevicesCached(ttlMs = 3000) {
+    if (deviceCache && Date.now() - deviceCache.at < ttlMs) {
+        return { ok: true, devices: deviceCache.devices };
+    }
+    const result = await listDevices();
+    if (result.ok) {
+        deviceCache = { at: Date.now(), devices: result.devices };
+    }
+    return result;
+}
+/** Fire-and-forget warm-up of the device-list cache (called at server start). */
+export function prefetchDevices() {
+    void listDevicesCached().catch(() => undefined);
+}
+/** Reset the device-list cache — exposed for tests. */
+export function _resetDeviceCache() {
+    deviceCache = null;
+}
 export async function boot(udid) {
     return toResult(await run(XCRUN, ["simctl", "boot", udid], { timeout: 30_000 }));
 }
