@@ -4,7 +4,7 @@
 
 **One baton. Every instrument.**
 
-A single stdio endpoint with **28 tools** for iOS-simulator device control, UI automation, end-to-end flows, and React Native debugging — one connection instead of several.
+A single stdio endpoint with **33 tools** for iOS-simulator device control, native UI automation, end-to-end flows, React Native debugging, and WebView DOM inspection — one connection instead of several.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
@@ -33,7 +33,7 @@ A podium is where a maestro stands — one place to conduct the whole orchestra.
 - [Usage](#usage)
 - [Prompt playbook](#prompt-playbook)
 - [Capability coverage](#capability-coverage-the-5-requirements)
-- [Tool reference](#tool-reference-28-tools)
+- [Tool reference](#tool-reference-33-tools)
 - [Documented limits](#documented-limits-by-design-not-bugs)
 - [Architecture](#architecture)
 - [Development](#development)
@@ -60,7 +60,9 @@ collapses that into **one** server with:
 
 - **macOS** with Xcode command-line tools (`xcrun`, `simctl`)
 - **Node.js ≥ 22** (uses native `fetch` and `WebSocket`)
-- **[Maestro](https://maestro.mobile.dev)** on `PATH` (or at `~/.maestro/bin`) for flow/interaction tools
+- **`mobilecli`** — bundled automatically as an npm dependency; the default native gesture + WebView backend (no separate install)
+- *(optional)* **[`idb`](https://fbidb.io)** (`idb` + `idb_companion`) — preferred native gesture backend when both are present; auto-detected
+- *(optional)* **[Maestro](https://maestro.mobile.dev)** on `PATH` (or at `~/.maestro/bin`) — the `run_flow` engine and the gesture fallback path
 - *(optional)* Android SDK + `adb` — adb paths degrade gracefully when absent
 - *(optional)* a running Metro bundler for the `metro_*` debugging tools
 
@@ -82,7 +84,7 @@ Once installed, four skills are available directly in Claude Code:
 | Bug repro | `/podium-mcp:bug-repro <UDID> <BUNDLE_ID> <description>` | Video + logs + crash evidence capture |
 | RN debug | `/podium-mcp:rn-debug [UDID] [logs\|apps\|crash\|all]` | Metro logs, connected apps, crash reports |
 
-The plugin auto-starts the MCP server (all 28 tools) when enabled. No `.mcp.json` edits required.
+The plugin auto-starts the MCP server (all 33 tools) when enabled. No `.mcp.json` edits required.
 
 > **To submit this plugin to the Claude community marketplace** (for discovery without the `marketplace add` step):
 > [claude.ai/settings/plugins/submit](https://claude.ai/settings/plugins/submit)
@@ -139,9 +141,9 @@ validated against a real simulator. Start with
 | 2 | Control device | `app_launch/terminate/install/uninstall`, `tap_on`, `swipe`, `input_text`, `press_key`, `set_location`, `orientation_set`, `open_url` | ✅ tap, key, location, orientation all pass |
 | 3 | Screenshot / capture | `screenshot`, `record_start`/`record_stop` (video) | ✅ PNG + QuickTime `.mp4` |
 | 4 | Make e2e | `run_flow`, `inspect_screen`, `cheat_sheet` + gestures | ✅ flow pass with per-step results |
-| 5 | Everything behind one connection | all 28 tools below — device, automation, capture, and debugging in a single endpoint | ✅ see [tool catalog](docs/tool-catalog.md) |
+| 5 | Everything behind one connection | all 33 tools below — device, automation, capture, debugging, and WebView inspection in a single endpoint | ✅ see [tool catalog](docs/tool-catalog.md) |
 
-## Tool reference (28 tools)
+## Tool reference (33 tools)
 
 | Tool | Key params | Backing engine | Failure behavior |
 |---|---|---|---|
@@ -158,54 +160,73 @@ validated against a real simulator. Start with
 | `app_list` | udid | `simctl listapps` + `plutil` JSON | `{ count, apps: [{bundleId, name, type}] }` |
 | `app_uninstall` | udid, bundleId | `simctl uninstall` | Structured tool error |
 | `screen_size` | udid | `simctl io screenshot` + `sips` | `{ widthPx, heightPx }` (real pixels) |
-| `orientation_get` | udid | screenshot aspect ratio | `{ orientation, widthPx, heightPx, basis }` (heuristic — no direct sim query) |
-| `orientation_set` | udid, bundleId, value | ephemeral Maestro `setOrientation` | PORTRAIT / LANDSCAPE_LEFT / LANDSCAPE_RIGHT / UPSIDE_DOWN |
+| `orientation_get` | udid | native query (`mobilecli`/`idb`) → screenshot fallback | `{ orientation, basis }` (exact when native; heuristic otherwise) |
+| `orientation_set` | udid, bundleId, value | native (`mobilecli`) → Maestro fallback | PORTRAIT / LANDSCAPE_LEFT / LANDSCAPE_RIGHT / UPSIDE_DOWN |
 | `record_start` | udid, saveTo? (.mp4) | detached `simctl io recordVideo` | `{ ok, path, pid }`; one recording per udid |
 | `record_stop` | udid | SIGINT the recorder + flush | `{ ok, path, sizeBytes }` |
-| `inspect_screen` | udid | `maestro hierarchy` | Structured error incl. unsupported-version detection |
-| `tap_on` | udid, bundleId, text\|id\|x+y, double?, long? | ephemeral Maestro flow | Validation before exec; idb retry (below) |
-| `input_text` | udid, bundleId, text, submit? | ephemeral Maestro flow | idb retry |
-| `swipe` | udid, bundleId, direction, start/end? | ephemeral Maestro flow | idb retry |
-| `press_key` | udid, bundleId, key | ephemeral Maestro flow | idb retry; back/power/tab are Android-only |
+| `inspect_screen` | udid, compact? | native flat AX list (`idb`/`mobilecli`) → `maestro hierarchy` | `compact:true` (default) returns only meaningful nodes |
+| `tap_on` | udid, bundleId, text\|id\|x+y, double?, long? | native tap (`idb`/`mobilecli`) → Maestro fallback | text/id resolved via the element list; reports `backend` |
+| `input_text` | udid, bundleId, text, submit? | native (`idb`/`mobilecli`) → Maestro fallback | reports `backend` |
+| `swipe` | udid, bundleId, direction, start/end? | native (`idb`/`mobilecli`) → Maestro fallback | %/pixel overrides resolved vs logical screen size |
+| `press_key` | udid, bundleId, key | native (`idb`/`mobilecli`) → Maestro fallback | back/power/tab are Android-only |
+| `tap_with_fallback` | udid, x, y, bundleId?, maxRetries?, offsetStep? | native tap + before/after screenshot diff | Retries at `y - offsetStep` until the screen changes; for WebGL/Canvas overlays |
+| `notification_bar_clear` | udid, bundleId? | native tap at (50,850) + screenshot diff | Dismisses the RN debug notification bar |
 | `run_flow` | udid + exactly one of yaml/files/dir(+tags), env? | `maestro test` | Exactly-one-of validated before exec; per-step results |
 | `cheat_sheet` | — | bundled `assets/maestro-cheat-sheet.yaml` | Fully offline |
+| `webview_inspect` | udid, selector?, webviewId?, max? | `mobilecli` (CDP) | Resolves a CSS selector to DOM elements with absolute `tapX`/`tapY` for `tap_on`; first visible WebView when `webviewId` omitted |
+| `webview_eval` | udid, expression, webviewId? | `mobilecli` (CDP) | Evaluates JS in the WebView page context (read `location.href`, store state, balances) |
+| `webview_navigate` | udid, action (`goto`\|`back`\|`forward`\|`reload`), url?, webviewId? | `mobilecli` (CDP) | Drives WebView navigation |
 | `metro_apps` | port? (8081) | GET `http://localhost:<port>/json` | Metro down → structured `metro not running` |
 | `metro_logs` | webSocketDebuggerUrl? / port?, durationMs?, maxLogs? | native WebSocket + CDP `Runtime.enable` | Auto-discovers first app when URL omitted |
 | `crash_list` | processName?, sinceHours?, udid? | `~/Library/Logs/DiagnosticReports` + sim container | Empty list when dir unreadable |
 | `crash_get` | id, udid? | same | Path-traversal-safe (basename only); truncates honestly |
 
-### Ephemeral-flow interaction model
+> **WebView tools** (`webview_inspect`/`eval`/`navigate`) use the bundled `mobilecli` over CDP — not the idb or Maestro paths — and require the app's `WKWebView.isInspectable = true` (default in debug/staging builds; usually disabled in production App Store builds).
 
-Imperative gestures (`tap_on`, `input_text`, `swipe`, `press_key`) are implemented by generating a minimal Maestro flow with `launchApp: { stopApp: false }` — the app is foregrounded **without restarting**, so sequential interactions preserve app state. One flow engine backs both declarative flows and one-off gestures.
+### Native-first gesture backend
 
-### Known idb flakiness — retry policy
+Imperative gestures (`tap_on`, `input_text`, `swipe`, `press_key`, `orientation_set`) and `inspect_screen` route through the fastest available backend, probed once and cached:
 
-Maestro's iOS driver intermittently fails with `Failed to connect to 127.0.0.1:<port>` / `java.net.ConnectException`. All flow executions automatically retry up to **2 times with 2s / 5s backoff** and report the `retries` count in the result. If the error persists after retries, the structured failure includes the raw output — the usual remedies are rebooting the simulator (`device_boot` after shutdown) or restarting the Maestro daemon.
+1. **`idb`** — used when both `idb` and `idb_companion` are installed (native, fastest).
+2. **`mobilecli`** — the bundled npm dependency (prebuilt Go binary). Default backend; no install needed.
+3. **Maestro fallback** — when no native backend resolves, or for actions a native backend can't express (double/long-press, `UPSIDE_DOWN`). The gesture generates a minimal flow with `launchApp: { stopApp: false }`, foregrounding the app **without restarting** so state is preserved.
+
+Each result reports the `backend` it used. Set `PODIUM_DISABLE_NATIVE=1` to force the Maestro path. Eliminating the per-gesture JVM spin-up cut `tap_on` from ~14.7 s to ~0.6 s and `inspect_screen` from ~8.9 s to ~0.9 s on an iPhone 16 Pro simulator. Run `npm run benchmark` for a full 33-tool pass/fail sweep.
+
+### Maestro fallback — idb flakiness retry
+
+When the Maestro fallback path runs, its iOS driver intermittently fails with `Failed to connect to 127.0.0.1:<port>` / `java.net.ConnectException`. Flow executions automatically retry up to **2 times with 2s / 5s backoff** and report the `retries` count. If it persists, the structured failure includes the raw output — the usual remedies are rebooting the simulator (`device_boot` after shutdown) or restarting the Maestro daemon.
 
 ## Documented limits (by design, not bugs)
 
-- **WebGL canvas content is un-automatable** — no DOM/hierarchy; taps don't reach the canvas. `inspect_screen` returns the native layer only.
+- **WebGL/Canvas content is un-automatable by selector** — no DOM/hierarchy; use `tap_with_fallback` with screenshot-derived coordinates.
+- **`inspect_screen` sees only the native layer for WebView content** — use `webview_inspect` to resolve `WKWebView` DOM elements to tap coordinates (requires `isInspectable = true`).
+- **WebView tools are dev/QA only** — production App Store builds typically set `WKWebView.isInspectable = false`.
 - **No Android SDK assumption** — every adb-backed path degrades to a structured "adb not found" result instead of failing.
 - **WebView content-process memory is unreadable** from the app sandbox (iOS/Android platform limit) — use indirect signals (memory warnings, process terminations).
 - **Maestro `text:` matcher is full-string regex (IGNORE_CASE)** — partial strings don't match; copy hierarchy `text` verbatim or anchor with `.*`.
 - **`record_start`/`record_stop` keep recorder state in-process** (one Map per udid, server is long-lived). Clients must serialize `start` → … → `stop` on the same connection; firing both in one un-awaited batch races. One active recording per udid.
-- **`orientation_get` is a screenshot-aspect heuristic** — iOS simulators expose no direct orientation query, so it infers portrait/landscape from pixel dimensions (`basis` field states this).
 
 ## Architecture
 
 ```
 src/
-  index.ts          # MCP server entry — registers every tool group
+  index.ts          # MCP server entry — registers every tool group, warms caches
   lib/
     exec.ts         # execFile-based command runner (NO shell) + commandExists
     result.ts       # shared ok/error MCP content helpers
-    simctl.ts       # xcrun simctl wrappers (device + app + screen)
+    simctl.ts       # xcrun simctl wrappers + device-list TTL cache
+    native.ts       # gesture/inspect backend abstraction: idb → mobilecli → null
+    idb.ts          # idb gesture/inspect adapter
+    gesture.ts      # nativeTap hybrid (backend → Maestro fallback)
     maestro.ts      # Maestro engine: flow runner, idb retry, hierarchy
+    webview.ts      # mobilecli CDP — WebView list/inspect/eval/navigate
     metro.ts        # Metro CDP — app discovery + console log capture
     crash.ts        # DiagnosticReports crash listing/reading
     recording.ts    # detached screen recording lifecycle
-  tools/            # one file per tool group (health, device, screen, flow, debug)
+  tools/            # one file per group (health, device, screen, flow, debug, webview)
 assets/             # bundled offline Maestro cheat sheet
+scripts/            # benchmark.ts (33-tool e2e), compare-mcps.ts
 docs/               # tool catalog + e2e transcript
 ```
 
@@ -235,7 +256,7 @@ See [`docs/e2e-demo.md`](docs/e2e-demo.md) for a real transcript against a boote
 
 podium-mcp is built around a few deliberate principles:
 
-- **One podium, one connection.** A single server fronts every mobile capability — device, UI, flows, capture, and debugging — so an agent configures one endpoint and discovers all 28 tools at once, instead of stitching together several servers.
+- **One podium, one connection.** A single server fronts every mobile capability — device, UI, flows, capture, debugging, and WebView inspection — so an agent configures one endpoint and discovers all 33 tools at once, instead of stitching together several servers.
 - **Safe by construction.** Every external command runs through an `execFile` layer with an explicit argument array — never a shell string — so tool inputs (udids, paths, selectors, flow YAML) can't be interpreted as commands.
 - **Never crash the conductor.** Tools return structured results and errors instead of throwing; one bad call can't take the server down.
 - **Degrade, don't fail.** A missing toolchain (e.g. Android's `adb`) yields an informative result rather than a hard error.
