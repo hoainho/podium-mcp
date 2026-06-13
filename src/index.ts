@@ -1,8 +1,10 @@
+#!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerHealthTool } from "./tools/health.js";
 import { registerDeviceTools } from "./tools/device.js";
 import { registerScreenTools } from "./tools/screen.js";
+import { registerStepsTools } from "./tools/steps.js";
 import { registerFlowTools } from "./tools/flow.js";
 import { registerDebugTools } from "./tools/debug.js";
 import { registerWebviewTools } from "./tools/webview.js";
@@ -17,6 +19,7 @@ const server = new McpServer({
 registerHealthTool(server);
 registerDeviceTools(server);
 registerScreenTools(server);
+registerStepsTools(server);
 registerFlowTools(server);
 registerDebugTools(server);
 registerWebviewTools(server);

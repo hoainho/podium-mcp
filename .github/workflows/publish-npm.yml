@@ -1,0 +1,28 @@
+name: Publish to npm
+
+# Publishes the podium-mcp package to npm using the org secret NHO_NPM_TOKEN.
+# Trigger manually from the Actions tab, or by pushing a tag like v0.1.0.
+# The token is read only inside CI — never exposed locally.
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NHO_NPM_TOKEN }}

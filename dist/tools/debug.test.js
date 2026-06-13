@@ -30,14 +30,14 @@ describe("app_state", () => {
             if (args.includes("listapps")) {
                 return {
                     code: 0,
-                    stdout: `{ "com.playstudios.thewinzone": { "CFBundleIdentifier": "com.playstudios.thewinzone" } }`,
+                    stdout: `{ "com.example.MyApp": { "CFBundleIdentifier": "com.example.MyApp" } }`,
                     stderr: "",
                 };
             }
             // launchctl list
             return {
                 code: 0,
-                stdout: `- 0 UIKitApplication:com.playstudios.thewinzone[0x1234]`,
+                stdout: `- 0 UIKitApplication:com.example.MyApp[0x1234]`,
                 stderr: "",
             };
         });
@@ -46,7 +46,7 @@ describe("app_state", () => {
         expect(handler).toBeDefined();
         const response = await handler({
             udid: "74DD7D29-38BC-4B82-B92A-FFA7E0C15F74",
-            bundleId: "com.playstudios.thewinzone",
+            bundleId: "com.example.MyApp",
         });
         expect(response.isError).toBeUndefined();
         const payload = JSON.parse(response.content[0].text);
@@ -58,7 +58,7 @@ describe("app_state", () => {
             if (args.includes("listapps")) {
                 return {
                     code: 0,
-                    stdout: `com.playstudios.thewinzone`,
+                    stdout: `com.example.MyApp`,
                     stderr: "",
                 };
             }
@@ -68,7 +68,7 @@ describe("app_state", () => {
         const handler = fake._handlers.get("app_state");
         const response = await handler({
             udid: "74DD7D29-38BC-4B82-B92A-FFA7E0C15F74",
-            bundleId: "com.playstudios.thewinzone",
+            bundleId: "com.example.MyApp",
         });
         const payload = JSON.parse(response.content[0].text);
         expect(payload.installed).toBe(true);
@@ -84,7 +84,7 @@ describe("app_state", () => {
         const handler = fake._handlers.get("app_state");
         const response = await handler({
             udid: "74DD7D29-38BC-4B82-B92A-FFA7E0C15F74",
-            bundleId: "com.playstudios.thewinzone",
+            bundleId: "com.example.MyApp",
         });
         const payload = JSON.parse(response.content[0].text);
         expect(payload.installed).toBe(false);
@@ -100,7 +100,7 @@ describe("app_state", () => {
         const handler = fake._handlers.get("app_state");
         const response = await handler({
             udid: "NONEXISTENT",
-            bundleId: "com.playstudios.thewinzone",
+            bundleId: "com.example.MyApp",
         });
         const payload = JSON.parse(response.content[0].text);
         expect(payload.installed).toBe(false);
@@ -132,11 +132,11 @@ describe("crash_list against tmp dir", () => {
         expect(entries[1].id).toBe("MyApp-2024-01-10-123000.ips");
     });
     it("filters by processName case-insensitively", async () => {
-        await writeFile(join(tmpDir, "thewinzone-2024-03-01-120000.ips"), '{"app_name":"thewinzone"}\nbody');
+        await writeFile(join(tmpDir, "myapp-2024-03-01-120000.ips"), '{"app_name":"myapp"}\nbody');
         await writeFile(join(tmpDir, "OtherApp-2024-03-01-120000.ips"), '{"app_name":"OtherApp"}\nbody');
-        const entries = await crash.listCrashes({ processName: "winzone" }, tmpDir);
+        const entries = await crash.listCrashes({ processName: "myapp" }, tmpDir);
         expect(entries.length).toBe(1);
-        expect(entries[0].id).toBe("thewinzone-2024-03-01-120000.ips");
+        expect(entries[0].id).toBe("myapp-2024-03-01-120000.ips");
     });
     it("returns empty array for a dir with no crash files", async () => {
         await writeFile(join(tmpDir, "readme.txt"), "not a crash");
@@ -235,7 +235,7 @@ describe("metro_apps", () => {
                 {
                     id: "abc123",
                     description: "React Native Debugger",
-                    title: "TheWinZone",
+                    title: "ExampleApp",
                     webSocketDebuggerUrl: "ws://localhost:8081/inspector/debug?device=1&page=1",
                 },
             ],
@@ -244,7 +244,7 @@ describe("metro_apps", () => {
         expect(Array.isArray(result)).toBe(true);
         if (Array.isArray(result)) {
             expect(result).toHaveLength(1);
-            expect(result[0].title).toBe("TheWinZone");
+            expect(result[0].title).toBe("ExampleApp");
             expect(result[0].webSocketDebuggerUrl).toContain("ws://");
         }
     });

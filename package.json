@@ -1,18 +1,17 @@
 {
   "name": "podium-mcp",
   "version": "0.1.0",
-  "private": true,
   "description": "Unified mobile E2E MCP server — one stdio server (28 tools) for iOS-simulator device control, UI automation, end-to-end flows, and React Native debugging.",
   "type": "module",
   "license": "MIT",
-  "author": "NhoNH <nhonh@geargames.com>",
-  "homepage": "https://github.com/nhonhgeargame/podium-mcp#readme",
+  "author": "hoainho <nhoxtvt@gmail.com>",
+  "homepage": "https://github.com/hoainho/podium-mcp#readme",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/nhonhgeargame/podium-mcp.git"
+    "url": "git+https://github.com/hoainho/podium-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/nhonhgeargame/podium-mcp/issues"
+    "url": "https://github.com/hoainho/podium-mcp/issues"
   },
   "keywords": [
     "mcp",
@@ -45,5 +44,13 @@
     "@types/node": "^22.15.21",
     "typescript": "^5.8.3",
     "vitest": "^3.2.2"
-  }
+  },
+  "main": "dist/index.js",
+  "bin": {
+    "podium-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ]
 }

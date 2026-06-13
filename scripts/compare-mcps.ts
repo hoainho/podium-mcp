@@ -23,7 +23,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
 
 const UDID = process.argv[2] ?? "74DD7D29-38BC-4B82-B92A-FFA7E0C15F74";
-const BUNDLE = process.argv[3] ?? "com.playstudios.thewinzone";
+const BUNDLE = process.argv[3] ?? "com.example.MyApp";
 
 // ─── Server definitions ──────────────────────────────────────────────────────
 

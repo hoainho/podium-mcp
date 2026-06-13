@@ -341,6 +341,17 @@ async function main(): Promise<void> {
     await run("run_flow", { udid, yaml: flowYaml });
   }
 
+  // 26. run_steps — batch macro (native screenshot + waitMs + tap in one call)
+  await run("run_steps", {
+    udid,
+    bundleId: targetBundleId,
+    steps: [
+      { action: "screenshot" },
+      { action: "waitMs", ms: 50 },
+      { action: "tap", x: 200, y: 400 },
+    ],
+  });
+
   // ── WebView tools (require an inspectable WKWebView in the foreground app) ──
   // "no embedded WebViews"/"not inspectable" is a precondition, not a bug.
   const noWebviewNote = "No inspectable WebView present (precondition, not a bug)";

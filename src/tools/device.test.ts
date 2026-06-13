@@ -236,8 +236,8 @@ describe("device tools via fake server", () => {
 
   it("app_list: parses listApps result (mocked run for simctl + plutil)", async () => {
     const plistJson = JSON.stringify({
-      "com.playstudios.thewinzone": {
-        CFBundleDisplayName: "The Win Zone",
+      "com.example.MyApp": {
+        CFBundleDisplayName: "Example App",
         ApplicationType: "User",
       },
       "com.apple.mobilesafari": {
@@ -268,10 +268,10 @@ describe("device tools via fake server", () => {
       apps: Array<{ bundleId: string; name: string; type: string }>;
     };
     expect(payload.count).toBe(2);
-    const winzone = payload.apps.find((a) => a.bundleId === "com.playstudios.thewinzone");
-    expect(winzone).toBeDefined();
-    expect(winzone?.name).toBe("The Win Zone");
-    expect(winzone?.type).toBe("User");
+    const myapp = payload.apps.find((a) => a.bundleId === "com.example.MyApp");
+    expect(myapp).toBeDefined();
+    expect(myapp?.name).toBe("Example App");
+    expect(myapp?.type).toBe("User");
   });
 
   it("app_list: returns isError on simctl failure", async () => {

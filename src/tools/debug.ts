@@ -140,7 +140,7 @@ export function registerDebugTools(server: McpServer): void {
     "Checks whether an app is installed and/or running on an iOS simulator. installed: checks xcrun simctl listapps output; running: checks launchctl list for UIKitApplication:<bundleId>.",
     {
       udid: z.string().describe("Simulator UDID"),
-      bundleId: z.string().describe("App bundle identifier (e.g. com.playstudios.thewinzone)"),
+      bundleId: z.string().describe("App bundle identifier (e.g. com.example.MyApp)"),
     },
     async ({ udid, bundleId }) => {
       const [listAppsResult, launchctlResult] = await Promise.all([
