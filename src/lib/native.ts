@@ -37,7 +37,7 @@ export interface NativeElement {
 /** Center point of an element frame, or null when the frame is unusable. */
 export function elementCenter(el: NativeElement): { x: number; y: number } | null {
   const f = el.frame;
-  if (!f || typeof f.x !== "number" || typeof f.y !== "number") return null;
+  if (!f || typeof f.x !== "number" || typeof f.y !== "number" || !Number.isFinite(f.x) || !Number.isFinite(f.y)) return null;
   if (!(f.width > 0) || !(f.height > 0)) return null;
   return { x: f.x + f.width / 2, y: f.y + f.height / 2 };
 }

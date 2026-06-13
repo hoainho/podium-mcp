@@ -1,7 +1,7 @@
 {
   "name": "podium-mcp",
   "version": "0.1.0",
-  "description": "Unified mobile E2E MCP server — one stdio server (28 tools) for iOS-simulator device control, UI automation, end-to-end flows, and React Native debugging.",
+  "description": "Unified mobile E2E MCP server — one stdio server (34 tools) for iOS-simulator device control, UI automation, end-to-end flows, React Native debugging, and WebView DOM inspection.",
   "type": "module",
   "license": "MIT",
   "author": "hoainho <nhoxtvt@gmail.com>",

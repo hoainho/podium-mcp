@@ -8,7 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **WebView introspection tools** (tool count 28 → **33**): `webview_inspect`
+- **WebView introspection tools** (tool count 28 → **34**): `webview_inspect`
   (resolve a CSS selector to DOM elements with absolute `tapX`/`tapY` tap
   coordinates), `webview_eval` (run JS in the page context), `webview_navigate`
   (goto/back/forward/reload). Powered by the bundled `mobilecli` over CDP;
@@ -25,7 +25,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `device_boot` is now idempotent (already-booted → `alreadyBooted: true`).
 - `device_list` TTL cache + boot-time prefetch.
 - `PODIUM_DISABLE_NATIVE` env switch to force the Maestro path.
-- `scripts/benchmark.ts` + `npm run benchmark` — drives all 33 tools.
+- `scripts/benchmark.ts` + `npm run benchmark` — drives all 34 tools.
 
 ### Fixed
 
@@ -52,6 +52,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `podium_health` toolchain detection (xcrun / maestro / adb).
 - idb-flakiness retry with backoff for Maestro flows.
 - Docs: `README.md`, `docs/tool-catalog.md`, `docs/e2e-demo.md`.
-- 61 unit tests (vitest); TypeScript strict; no type suppression.
+- 66 unit tests (vitest); TypeScript strict; no type suppression.
 
 [0.1.0]: https://github.com/hoainho/podium-mcp/releases/tag/v0.1.0

@@ -4,13 +4,13 @@
 
 **One baton. Every instrument.**
 
-A single stdio endpoint with **33 tools** for iOS-simulator device control, native UI automation, end-to-end flows, React Native debugging, and WebView DOM inspection — one connection instead of several.
+A single stdio endpoint with **34 tools** for iOS-simulator device control, native UI automation, end-to-end flows, React Native debugging, and WebView DOM inspection — one connection instead of several.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7C3AED)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-61%20passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-66%20passing-brightgreen.svg)](#development)
 [![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
 
 <br/>
@@ -23,7 +23,7 @@ A single stdio endpoint with **33 tools** for iOS-simulator device control, nati
 
 ---
 
-A podium is where a maestro stands — one place to conduct the whole orchestra. This MCP server unifies three capability sets into a single stdio endpoint: **device management** (via `simctl`, with graceful `adb` support), **UI inspection, interaction, and declarative end-to-end flows** (driven through the Maestro flow engine), and **React Native debugging** (Metro console logs over CDP + crash reports). Rather than wiring several separate MCP servers into every client config, `podium-mcp` exposes everything behind one connection, with a shared exec layer, consistent error handling, and a single health-check tool to confirm what toolchain is available on the host machine.
+A podium is where a maestro stands — one place to conduct the whole orchestra. This MCP server unifies four capability sets into a single stdio endpoint: **device management** (via `simctl`, with graceful `adb` support); **native UI inspection, interaction, and declarative end-to-end flows** (gestures route through `idb`/`mobilecli` with a Maestro fallback); **WebView DOM inspection** (via `mobilecli` over CDP); and **React Native debugging** (Metro console logs over CDP + crash reports). Rather than wiring several separate MCP servers into every client config, `podium-mcp` exposes everything behind one connection, with a shared exec layer, consistent error handling, and a single health-check tool to confirm what toolchain is available on the host machine.
 
 ## Table of contents
 
@@ -33,7 +33,7 @@ A podium is where a maestro stands — one place to conduct the whole orchestra.
 - [Usage](#usage)
 - [Prompt playbook](#prompt-playbook)
 - [Capability coverage](#capability-coverage-the-5-requirements)
-- [Tool reference](#tool-reference-33-tools)
+- [Tool reference](#tool-reference-34-tools)
 - [Documented limits](#documented-limits-by-design-not-bugs)
 - [Architecture](#architecture)
 - [Development](#development)
@@ -84,10 +84,10 @@ Once installed, four skills are available directly in Claude Code:
 | Bug repro | `/podium-mcp:bug-repro <UDID> <BUNDLE_ID> <description>` | Video + logs + crash evidence capture |
 | RN debug | `/podium-mcp:rn-debug [UDID] [logs\|apps\|crash\|all]` | Metro logs, connected apps, crash reports |
 
-The plugin auto-starts the MCP server (all 33 tools) when enabled. No `.mcp.json` edits required.
+The plugin auto-starts the MCP server (all 34 tools) when enabled. No `.mcp.json` edits required.
 
-> **To submit this plugin to the Claude community marketplace** (for discovery without the `marketplace add` step):
-> [claude.ai/settings/plugins/submit](https://claude.ai/settings/plugins/submit)
+> **To submit this plugin to the Claude community marketplace** (for discovery without the `marketplace add` step), run `claude plugin validate .` then submit via the Console form:
+> [platform.claude.com/plugins/submit](https://platform.claude.com/plugins/submit) — Team/Enterprise orgs use [claude.ai/admin-settings/directory/submissions/plugins/new](https://claude.ai/admin-settings/directory/submissions/plugins/new).
 
 ## Manual installation
 
@@ -141,9 +141,9 @@ validated against a real simulator. Start with
 | 2 | Control device | `app_launch/terminate/install/uninstall`, `tap_on`, `swipe`, `input_text`, `press_key`, `set_location`, `orientation_set`, `open_url` | ✅ tap, key, location, orientation all pass |
 | 3 | Screenshot / capture | `screenshot`, `record_start`/`record_stop` (video) | ✅ PNG + QuickTime `.mp4` |
 | 4 | Make e2e | `run_flow`, `inspect_screen`, `cheat_sheet` + gestures | ✅ flow pass with per-step results |
-| 5 | Everything behind one connection | all 33 tools below — device, automation, capture, debugging, and WebView inspection in a single endpoint | ✅ see [tool catalog](docs/tool-catalog.md) |
+| 5 | Everything behind one connection | all 34 tools below — device, automation, capture, debugging, and WebView inspection in a single endpoint | ✅ see [tool catalog](docs/tool-catalog.md) |
 
-## Tool reference (33 tools)
+## Tool reference (34 tools)
 
 | Tool | Key params | Backing engine | Failure behavior |
 |---|---|---|---|
@@ -256,7 +256,7 @@ See [`docs/e2e-demo.md`](docs/e2e-demo.md) for a real transcript against a boote
 
 podium-mcp is built around a few deliberate principles:
 
-- **One podium, one connection.** A single server fronts every mobile capability — device, UI, flows, capture, debugging, and WebView inspection — so an agent configures one endpoint and discovers all 33 tools at once, instead of stitching together several servers.
+- **One podium, one connection.** A single server fronts every mobile capability — device, UI, flows, capture, debugging, and WebView inspection — so an agent configures one endpoint and discovers all 34 tools at once, instead of stitching together several servers.
 - **Safe by construction.** Every external command runs through an `execFile` layer with an explicit argument array — never a shell string — so tool inputs (udids, paths, selectors, flow YAML) can't be interpreted as commands.
 - **Never crash the conductor.** Tools return structured results and errors instead of throwing; one bad call can't take the server down.
 - **Degrade, don't fail.** A missing toolchain (e.g. Android's `adb`) yields an informative result rather than a hard error.
