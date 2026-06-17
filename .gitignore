@@ -13,3 +13,7 @@ coverage/
 # OS / editor
 .DS_Store
 *.log
+
+# build outputs (compiled fixtures)
+build/
+e2e/fixtures/**/build/

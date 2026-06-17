@@ -10,6 +10,8 @@ export interface RunResult {
   code: number;
   stdout: string;
   stderr: string;
+  /** True when the process was killed because it exceeded its timeout (not a real exit code). */
+  timedOut?: boolean;
 }
 
 /**
@@ -29,13 +31,27 @@ export async function run(
       env: opts?.env,
       maxBuffer: 16 * 1024 * 1024,
     });
-    return { code: 0, stdout: stdout.trim(), stderr: stderr.trim() };
+    return { code: 0, stdout: stdout.trim(), stderr: stderr.trim(), timedOut: false };
   } catch (err) {
-    const e = err as { code?: number; stdout?: string; stderr?: string };
+    const e = err as {
+      code?: number | string;
+      killed?: boolean;
+      signal?: string;
+      stdout?: string;
+      stderr?: string;
+    };
+    // execFile kills the child with SIGTERM when the timeout fires (code is then
+    // null/non-numeric). Distinguish that from a maxBuffer overrun, which also
+    // kills the child but carries the ERR_CHILD_PROCESS_STDIO_MAXBUFFER code.
+    const timedOut =
+      e.killed === true &&
+      e.signal === "SIGTERM" &&
+      e.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
     return {
       code: typeof e.code === "number" ? e.code : 1,
       stdout: (e.stdout ?? "").trim(),
       stderr: (e.stderr ?? "").trim(),
+      timedOut,
     };
   }
 }

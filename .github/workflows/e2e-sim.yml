@@ -1,0 +1,41 @@
+name: E2E (simulator)
+
+# Real end-to-end smoke test against a booted iOS simulator on a macOS runner.
+# Nightly + manual only — NOT a PR gate (simulator runs are slow/flaky-prone).
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC nightly
+
+jobs:
+  e2e:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run build
+      - name: Boot a simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json | node -e "const j=JSON.parse(require('fs').readFileSync(0));const all=Object.values(j.devices).flat().filter(d=>d.isAvailable&&/iPhone/.test(d.name));if(!all.length){console.error('no iPhone sim');process.exit(1)}console.log(all[0].udid)")
+          echo "Booting $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b || true
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+      - name: Build + install WKWebView fixture (unlocks webview_* happy-path)
+        run: e2e/fixtures/webview-native/build.sh "$UDID" || echo "fixture build failed — webview falls back to error-path"
+      - name: Run smoke e2e (device control)
+        run: node e2e/smoke.e2e.mjs
+      - name: Run full smoke e2e (all 43 tools)
+        run: node e2e/full-smoke.e2e.mjs
+      - name: Upload screenshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/podium-e2e-*/**/*.png
+          if-no-files-found: ignore

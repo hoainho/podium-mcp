@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { runMaestroFlow } from "../lib/maestro.js";
+import { stepsToMaestro } from "../lib/export-maestro.js";
+import { stepSchema } from "./steps.js";
 import { errorResult, okResult } from "../lib/result.js";
 /**
  * Resolves the package root from anywhere under dist/ or src/.
@@ -20,7 +22,11 @@ export function registerFlowTools(server) {
     // ─── run_flow ─────────────────────────────────────────────────────────────────
     server.tool("run_flow", "Execute one or more Maestro flows on a device. Provide exactly one of: " +
         "yaml (inline YAML string), files (array of flow file paths), or dir (directory path). " +
-        "includeTags and excludeTags are only applicable when using dir.", {
+        "includeTags and excludeTags are only applicable when using dir. " +
+        "When to use: run_flow gives the full Maestro vocabulary (assertions, conditionals, loops, " +
+        "retries); for a simple sequence of taps/types prefer run_steps, and for one gesture use the " +
+        "individual tools. TRUST BOUNDARY: Maestro flows can run arbitrary JS (evalScript) and local " +
+        "files (runScript/files/dir), so treat run_flow input as locally-executable code.", {
         udid: z.string().describe("Simulator / device UDID (from device_list)"),
         yaml: z
             .string()
@@ -87,6 +93,18 @@ export function registerFlowTools(server) {
         catch (err) {
             return errorResult(`run_flow failed: ${String(err)}`);
         }
+    });
+    // ─── export_flow ────────────────────────────────────────────────────────────
+    server.tool("export_flow", "Exports a run_steps action sequence to a reusable Maestro flow (the engineer→QA bridge). " +
+        "Selector-based steps (tapText by id/text, key, swipe-by-direction, waitFor, assertVisible, screenshot) " +
+        "transpile cleanly. The lossy steps — coordinate tap/swipe, focused-field type, regex tapText — are emitted " +
+        "as commented '# TODO[unstable]' lines plus a warnings[] list, never as silently divergent YAML. Fix the " +
+        "TODOs to make the flow durable regression.", {
+        bundleId: z.string().describe("App bundle id for the flow's appId header"),
+        steps: z.array(stepSchema).min(1).describe("The run_steps action array to transpile"),
+    }, async ({ bundleId, steps }) => {
+        const { yaml, warnings } = stepsToMaestro(bundleId, steps);
+        return okResult({ yaml, warnings, lossySteps: warnings.length });
     });
     // ─── cheat_sheet ──────────────────────────────────────────────────────────────
     server.tool("cheat_sheet", "Returns the bundled Maestro flow script cheat sheet (offline copy). " +

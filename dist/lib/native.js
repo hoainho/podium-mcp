@@ -111,6 +111,7 @@ export async function resolveMobilecli() {
 export function _resetNativeCache() {
     cachedMobilecli = undefined;
     cachedBackend = undefined;
+    negativeProbeAt = 0;
     screenPointsCache.clear();
 }
 // ─── mobilecli backend ───────────────────────────────────────────────────────
@@ -254,25 +255,39 @@ function makeIdbBackend() {
 }
 // ─── Backend selection ───────────────────────────────────────────────────────
 let cachedBackend;
+/** Timestamp of the last probe that found no backend (0 = never). */
+let negativeProbeAt = 0;
+/** How long a "no backend" result is trusted before re-probing. */
+const NEGATIVE_PROBE_TTL_MS = 30_000;
 /**
- * Best available native backend, probed once: idb → mobilecli → null.
- * null means callers must use the Maestro fallback.
+ * Best available native backend: idb → mobilecli → null (Maestro fallback).
+ *
+ * A *positive* result is cached for the process lifetime. A *negative* result
+ * (no backend) is cached only for NEGATIVE_PROBE_TTL_MS, then re-probed — so a
+ * backend installed/started after server launch (e.g. idb_companion warming up)
+ * is picked up instead of permanently downgrading to the slow Maestro path.
  */
-export async function getBackend() {
+export async function getBackend(overrides) {
     // Operational escape hatch: force the Maestro fallback path everywhere.
     if (process.env.PODIUM_DISABLE_NATIVE)
         return null;
     if (cachedBackend !== undefined)
         return cachedBackend;
-    if (await idbAvailable()) {
+    const now = overrides?.now ?? Date.now;
+    const ttl = overrides?.negativeTtlMs ?? NEGATIVE_PROBE_TTL_MS;
+    if (negativeProbeAt > 0 && now() - negativeProbeAt < ttl)
+        return null;
+    const probeIdb = overrides?.idbAvailable ?? idbAvailable;
+    const probeMobilecli = overrides?.resolveMobilecli ?? resolveMobilecli;
+    if (await probeIdb()) {
         cachedBackend = makeIdbBackend();
         return cachedBackend;
     }
-    const mobilecli = await resolveMobilecli();
+    const mobilecli = await probeMobilecli();
     if (mobilecli) {
         cachedBackend = makeMobilecliBackend(mobilecli);
         return cachedBackend;
     }
-    cachedBackend = null;
+    negativeProbeAt = now();
     return null;
 }

@@ -156,17 +156,62 @@ R5 (rút `lib/gesture.ts`) → R1 (oracle pixel) → Q1.
 Hoàn thiện Q3/Q4 docs, A2 docs, làm rõ scope iOS-only (F1-b), `docs/tool-catalog.md`.
 - **Done khi:** README/SECURITY/tool-catalog phản ánh hành vi v0.2.0; CHANGELOG cập nhật; bump version 0.2.0.
 
-### M4 (để sau / tách version) — Mở rộng nền tảng
-F2 (E2E sim CI), F1-a (adb backend) → cân nhắc cho v0.3.0.
+### M4 — Release-readiness (GỘP VÀO v0.2.0, xem mục CHỐT bên dưới)
+Trước đây tách sang v0.3; nay v0.2.0 chưa release nên kéo các hạng mục release-ready vào chính v0.2.0.
+
+> ⚠️ Mục "Đề xuất scope" cũ bên dưới đã **bị thay thế** bởi mục **🔒 CHỐT** ở cuối.
 
 ---
 
-## Đề xuất scope v0.2.0
+## Đề xuất scope v0.2.0 *(BẢN CŨ — đã superseded bởi mục 🔒 CHỐT)*
 
 **Phải có (P0/P1):** R1, R2, R3, R4, R5, Q1, Q3(docs+gate), A1 — + test T1–T6.
-
 **Nên có (P2 rẻ):** A2, A3, Q2, Q4, Q5, Q6, Q7, F1-b (làm rõ scope iOS-only).
+**Để sau:** F1-a (adb đầy đủ), F2 (E2E sim CI).
 
-**Để sau (v0.3.0):** F1-a (adb backend đầy đủ), F2 (E2E sim trong CI).
+---
 
-**Tiêu chí phát hành v0.2.0:** `npm run typecheck && npm run build && npm test` đều exit 0; suite ≥ 113 test (cộng T1–T6) xanh; 1 lượt manual QA trên simulator thật cho tap WebView + cold launch; CHANGELOG + version bump; trust-boundary đã document.
+## 🔒 CHỐT — v0.2.0 FINAL SCOPE (release-ready)
+
+> Quyết định: v0.2.0 trở thành **mốc release-ready**. Các hạng mục "v0.3 must-have" trong
+> `docs/COMPETITIVE-ANALYSIS-and-ROADMAP-v0.3.md` được **kéo vào v0.2.0**. Differentiator nặng
+> (cloud, export, real-device, proxy, Android backend đầy đủ) ở lại **post-0.2.0**.
+
+### A. ĐÃ XONG trong v0.2.0 ✅ (đã verify, architect PASS, 126 test)
+R1 (oracle: bỏ blind walk + doc) · R2 (timeout + timedOut) · R3 (recording timestamp+watchdog) ·
+R4 (backend negative-cache TTL) · R5 (gộp gesture executors) · Q1 (exact bundle-id) ·
+Q2 (metro errors) · Q3/Q4 (trust-boundary + PII + webview_eval gate) · Q6 (.npmrc) ·
+Q7 (tool-catalog) · A1/A2/A3 (mô tả tool) · version 0.2.0 + CHANGELOG.
+
+### B. CÒN LẠI trong v0.2.0 — release-ready (theo thứ tự thực thi)
+
+| ID | Hạng mục | Giải pháp | Khu vực | Effort | Done (kiểm chứng) |
+|----|----------|-----------|---------|--------|-------------------|
+| **V2-1** | **Scope nền tảng minh bạch** (G1/G9, P0-2) | Gỡ/đánh dấu rõ "Android" trong mọi tool description khi chưa có adb; gate phím Android; podium_health nêu rõ iOS-sim-only | `tools/device.ts`, `screen.ts`, `health.ts` | **S** | Không mô tả nào hứa Android nếu chưa hỗ trợ; gọi Android → lỗi rõ ràng, không phải xcrun mơ hồ; test |
+| **V2-2** | **Network introspection** (G2, P0-3) | Tool `metro_network`: Metro CDP `Network.enable` → thu requestWillBeSent/responseReceived (status/timing/url), multiplex WebSocket như metro_logs | `lib/metro.ts`, `tools/debug.ts` | **M** | metro_network trả list req/resp trên 1 app RN; test mock CDP; output token-efficient |
+| **V2-3** | **Oracle tap nâng cấp** (G4, P1-1) | Thay byte-size bằng **pixel-diff** (decode PNG downsample, ngưỡng %pixel) hoặc verify qua a11y/DOM; ưu tiên webview_inspect khi có WebView | `tools/screen.ts`, helper mới | **M** | tap_with_fallback phân biệt đúng change/no-change trên fixture động; test; không false-positive |
+| **V2-4** | **WebView ổn định** (G5, P1-2) | Phát hiện & báo lỗi actionable khi `isInspectable=false`; doc cách bật ở debug/staging; hướng dẫn fallback coordinate | `lib/webview.ts`, `tools/webview.ts`, docs | **S** | webview_* trả lỗi rõ khi prod build; doc cập nhật; test thông điệp lỗi |
+| **V2-5** | **E2E thật trên sim** (G3, F2) | 1 smoke e2e: boot sim → install app mẫu → tap/inspect/screenshot → assert; chạy nightly/tag, không chặn PR | CI workflow + flow | **M** | ≥1 e2e xanh trên CI macOS; artifact (screenshot) lưu; repro-first |
+| **V2-6** | **Official MCP Registry** (G6, P0-5) | `server.json` chuẩn registry (name/version/packages/transport); publish qua `mcp-publisher`; semver immutable; giữ test-gate trước publish | repo root, CI | **S** | Podium trên registry.modelcontextprotocol.io + Glama; `npx -y podium-mcp` chạy |
+
+### C. NÊN CÓ trong v0.2.0 (nếu kịp; nếu không → trượt sang post-0.2.0 có ghi chú)
+- **V2-7** Android emu cơ bản (G1, P0-1, **L**): backend adb cho device_list/tap/inspect/screenshot/logs. *Nếu không kịp → V2-1 (scope minh bạch) là điều kiện đủ để release.*
+- **V2-8** RN sâu hơn (P1-3, M): `metro_state` (Redux snapshot) + perf marks.
+
+### D. ĐỂ SAU (post-0.2.0 / v1.0)
+Cloud submit+poll (P2-1) · test-recording → Appium/Maestro/Detox (P2-2) · real-device iOS qua WDA (P2-3) · HTTPS proxy capture (P2-4) · Android backend đầy đủ (nếu V2-7 chỉ làm cơ bản).
+
+### E. Thứ tự thực thi (sau phần A đã xong)
+M5: V2-1 + V2-4 (rẻ, gỡ rủi ro nhận thức) → M6: V2-2 (network) + V2-3 (oracle) → M7: V2-5 (e2e) → M8: V2-6 (registry, làm sát release) → (nếu kịp) V2-7/V2-8.
+
+### F. Tiêu chí phát hành v0.2.0 (CHỐT — phải đạt hết)
+1. `npm run typecheck && npm run build && npm test` exit 0; test ≥ 126 hiện tại **+** test mới của V2-2/V2-3.
+2. **≥1 e2e thật** xanh trên CI (boot→install→tap→assert), không chỉ unit mock (V2-5).
+3. Có **network introspection** (metro_network), không chỉ console (V2-2).
+4. Oracle tap **không false-positive** trên nội dung động (V2-3).
+5. Nền tảng minh bạch: Android được hỗ trợ thật **hoặc** mọi mô tả nêu rõ iOS-sim-only (V2-1).
+6. WebView báo lỗi actionable khi `isInspectable=false` + doc (V2-4).
+7. Lên **Official MCP Registry + Glama**, `npx -y` chạy, semver immutable, test-gate trước publish (V2-6).
+8. CHANGELOG + version + trust-boundary docs đầy đủ (đã có, cập nhật khi thêm tool).
+
+> **Định vị v0.2.0:** "MCP mobile cho AI agent — mạnh nhất về **iOS + WebView DOM**, có **network introspection RN**, chạy **e2e thật**, phân phối **chuẩn registry**." Đủ khác biệt + đủ chuẩn để release.

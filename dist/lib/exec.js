@@ -17,14 +17,21 @@ export async function run(cmd, args, opts) {
             env: opts?.env,
             maxBuffer: 16 * 1024 * 1024,
         });
-        return { code: 0, stdout: stdout.trim(), stderr: stderr.trim() };
+        return { code: 0, stdout: stdout.trim(), stderr: stderr.trim(), timedOut: false };
     }
     catch (err) {
         const e = err;
+        // execFile kills the child with SIGTERM when the timeout fires (code is then
+        // null/non-numeric). Distinguish that from a maxBuffer overrun, which also
+        // kills the child but carries the ERR_CHILD_PROCESS_STDIO_MAXBUFFER code.
+        const timedOut = e.killed === true &&
+            e.signal === "SIGTERM" &&
+            e.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
         return {
             code: typeof e.code === "number" ? e.code : 1,
             stdout: (e.stdout ?? "").trim(),
             stderr: (e.stderr ?? "").trim(),
+            timedOut,
         };
     }
 }

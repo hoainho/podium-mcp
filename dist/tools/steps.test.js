@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as exec from "../lib/exec.js";
 import * as nativeLib from "../lib/native.js";
 import * as gestureLib from "../lib/gesture.js";
 import * as maestroLib from "../lib/maestro.js";
@@ -105,7 +106,14 @@ describe("run_steps", () => {
     it("tapText falls back to Maestro when no native element matches", async () => {
         // Backend present but its element list never matches → Maestro fallback path.
         vi.spyOn(nativeLib, "getBackend").mockResolvedValue(makeFakeBackend({ describeAll: vi.fn(async () => []) }));
-        vi.spyOn(gestureLib, "resolveForegroundApp").mockResolvedValue("com.example.app");
+        // No bundleId is passed, so the shared executor auto-detects the foreground
+        // app via resolveForegroundApp → exec.run(launchctl). Mock that here
+        // (spying resolveForegroundApp directly can't intercept the same-module call).
+        vi.spyOn(exec, "run").mockResolvedValue({
+            code: 0,
+            stdout: "- 0 UIKitApplication:com.example.app[0x1]",
+            stderr: "",
+        });
         const flowSpy = vi
             .spyOn(maestroLib, "runMaestroFlow")
             .mockResolvedValue({ passed: true, retries: 0, steps: [], rawOutput: "", durationMs: 1 });

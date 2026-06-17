@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.hoainho/podium-mcp",
+  "description": "Mobile E2E MCP (43 tools): iOS-simulator control, native UI automation, Maestro flows, React Native debugging (logs/network/state), and WebView DOM inspection. Requires macOS + Xcode.",
+  "version": "0.2.0",
+  "websiteUrl": "https://github.com/hoainho/podium-mcp",
+  "repository": {
+    "url": "https://github.com/hoainho/podium-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "podium-mcp",
+      "version": "0.2.0",
+      "runtimeHint": "npx",
+      "transport": { "type": "stdio" }
+    }
+  ]
+}

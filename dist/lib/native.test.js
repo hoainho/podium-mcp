@@ -238,3 +238,50 @@ describe("mobilecli backend screenPoints — scale guard", () => {
         expect(dims).toEqual({ w: 390, h: 844 });
     });
 });
+// ─── getBackend — negative-cache TTL (R4) ─────────────────────────────────────
+describe("getBackend — negative-cache TTL", () => {
+    beforeEach(async () => {
+        vi.restoreAllMocks();
+        const { _resetNativeCache } = await import("./native.js");
+        _resetNativeCache();
+    });
+    it("re-probes after the negative-cache TTL elapses instead of caching null forever", async () => {
+        const { getBackend, _resetNativeCache } = await import("./native.js");
+        _resetNativeCache();
+        let t = 1000;
+        const now = () => t;
+        let idbCalls = 0;
+        const idbAvailable = async () => {
+            idbCalls++;
+            return false;
+        };
+        const resolveMobilecli = async () => null;
+        const opts = { now, idbAvailable, resolveMobilecli, negativeTtlMs: 5000 };
+        // First probe → no backend, negative-cached at t=1000
+        expect(await getBackend(opts)).toBeNull();
+        expect(idbCalls).toBe(1);
+        // Within TTL → served from negative cache, no re-probe
+        t = 2000;
+        expect(await getBackend(opts)).toBeNull();
+        expect(idbCalls).toBe(1);
+        // After TTL → re-probe happens
+        t = 7000;
+        expect(await getBackend(opts)).toBeNull();
+        expect(idbCalls).toBe(2);
+    });
+    it("caches a positive backend indefinitely (probed once)", async () => {
+        const { getBackend, _resetNativeCache } = await import("./native.js");
+        _resetNativeCache();
+        let idbCalls = 0;
+        const idbAvailable = async () => {
+            idbCalls++;
+            return true;
+        };
+        const be1 = await getBackend({ idbAvailable });
+        const be2 = await getBackend({ idbAvailable });
+        expect(be1).not.toBeNull();
+        expect(be1?.name).toBe("idb");
+        expect(be1).toBe(be2); // same cached instance
+        expect(idbCalls).toBe(1); // probed only once
+    });
+});

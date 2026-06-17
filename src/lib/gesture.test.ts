@@ -246,3 +246,106 @@ describe("resolveForegroundApp", () => {
     expect(args).toEqual(["simctl", "spawn", "MY-UDID", "launchctl", "list"]);
   });
 });
+
+// ─── Shared gesture executors (R5) ────────────────────────────────────────────
+
+const OK = { code: 0, stdout: "", stderr: "" };
+
+function makeBackend(overrides: Partial<nativeLib.NativeBackend> = {}): nativeLib.NativeBackend {
+  return {
+    name: "mobilecli",
+    tap: vi.fn(async () => OK),
+    swipe: vi.fn(async () => OK),
+    inputText: vi.fn(async () => OK),
+    canPressKey: () => false,
+    pressKey: vi.fn(async () => OK),
+    describeAll: vi.fn(async () => []),
+    screenPoints: vi.fn(async () => ({ w: 402, h: 874 })),
+    setOrientation: vi.fn(async () => null),
+    ...overrides,
+  } as unknown as nativeLib.NativeBackend;
+}
+
+describe("shared gesture executors", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    nativeLib._resetNativeCache();
+  });
+
+  it("nativeKey: native mapping wins and no Maestro flow runs", async () => {
+    vi.spyOn(nativeLib, "getBackend").mockResolvedValue(
+      makeBackend({ canPressKey: () => true, pressKey: vi.fn(async () => OK) })
+    );
+    const flow = vi.spyOn(maestroLib, "runMaestroFlow");
+    const { nativeKey } = await import("./gesture.js");
+    const g = await nativeKey("U", "home");
+    expect(g.ok).toBe(true);
+    expect(g.backend).toBe("mobilecli");
+    expect(flow).not.toHaveBeenCalled();
+  });
+
+  it("nativeKey: Maestro fallback YAML includes launchApp only when requested", async () => {
+    vi.spyOn(nativeLib, "getBackend").mockResolvedValue(null);
+    let yaml = "";
+    vi.spyOn(maestroLib, "runMaestroFlow").mockImplementation(async (opts) => {
+      yaml = opts.yaml ?? "";
+      return { passed: true, retries: 0, steps: [], rawOutput: "", durationMs: 1 };
+    });
+    const { nativeKey } = await import("./gesture.js");
+
+    await nativeKey("U", "back", { bundleId: "com.x", launchApp: true });
+    expect(yaml).toContain("appId: com.x");
+    expect(yaml).toContain("launchApp");
+    expect(yaml).toContain('pressKey: "Back"');
+
+    await nativeKey("U", "back", { bundleId: "com.x", launchApp: false });
+    expect(yaml).not.toContain("launchApp");
+  });
+
+  it("nativeSwipe: percent overrides resolve against screen dims for the native path", async () => {
+    const swipeSpy = vi.fn(async () => OK);
+    vi.spyOn(nativeLib, "getBackend").mockResolvedValue(
+      makeBackend({ screenPoints: vi.fn(async () => ({ w: 400, h: 800 })), swipe: swipeSpy })
+    );
+    const { nativeSwipe } = await import("./gesture.js");
+    const g = await nativeSwipe("U", {
+      overrides: { startX: "50%", startY: "25%", endX: "50%", endY: "75%" },
+    });
+    expect(g.ok).toBe(true);
+    expect(g.points).toEqual({ x1: 200, y1: 200, x2: 200, y2: 600 });
+    expect(swipeSpy).toHaveBeenCalledWith("U", 200, 200, 200, 600);
+  });
+
+  // R5 parity: the swipe tool (screen.ts) and the run_steps swipe step (steps.ts)
+  // must resolve to identical native points because they share nativeSwipe.
+  it("parity: swipe tool and run_steps swipe produce identical native points", async () => {
+    const swipeCalls: number[][] = [];
+    const backend = makeBackend({
+      screenPoints: vi.fn(async () => ({ w: 402, h: 874 })),
+      swipe: vi.fn(async (_u: string, x1: number, y1: number, x2: number, y2: number) => {
+        swipeCalls.push([x1, y1, x2, y2]);
+        return OK;
+      }),
+    });
+    vi.spyOn(nativeLib, "getBackend").mockResolvedValue(backend);
+
+    type Handler = (a: Record<string, unknown>) => Promise<{ content: Array<{ text: string }> }>;
+    function fakeServer() {
+      const h = new Map<string, Handler>();
+      return { h, tool: (n: string, _d: string, _s: unknown, fn: Handler) => h.set(n, fn) };
+    }
+
+    const { registerScreenTools } = await import("../tools/screen.js");
+    const s1 = fakeServer();
+    registerScreenTools(s1 as unknown as import("@modelcontextprotocol/sdk/server/mcp.js").McpServer);
+    await s1.h.get("swipe")!({ udid: "U", bundleId: "com.x", direction: "up" });
+
+    const { registerStepsTools } = await import("../tools/steps.js");
+    const s2 = fakeServer();
+    registerStepsTools(s2 as unknown as import("@modelcontextprotocol/sdk/server/mcp.js").McpServer);
+    await s2.h.get("run_steps")!({ udid: "U", steps: [{ action: "swipe", direction: "up" }] });
+
+    expect(swipeCalls).toHaveLength(2);
+    expect(swipeCalls[0]).toEqual(swipeCalls[1]);
+  });
+});

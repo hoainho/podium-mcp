@@ -1,0 +1,40 @@
+name: Publish to MCP Registry
+
+# Publishes server.json to the official MCP Registry (registry.modelcontextprotocol.io)
+# AFTER the npm package is live, using GitHub OIDC for the io.github.hoainho/* namespace
+# (no long-lived token needed). Trigger manually or on a v* tag.
+#
+# Prereq: the npm package version in server.json must already be published to npm.
+# Run the "Publish to npm" workflow first (or push the tag, which triggers both).
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish-registry:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # GitHub OIDC → registry auth for io.github.* namespace
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Quality gate before publishing the manifest (mirror the npm workflow).
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      # Install the official publisher CLI and publish server.json.
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m).tar.gz" -o mcp-publisher.tar.gz
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+      - name: Authenticate (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+      - name: Publish server.json
+        run: ./mcp-publisher publish

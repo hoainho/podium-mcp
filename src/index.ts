@@ -8,12 +8,14 @@ import { registerStepsTools } from "./tools/steps.js";
 import { registerFlowTools } from "./tools/flow.js";
 import { registerDebugTools } from "./tools/debug.js";
 import { registerWebviewTools } from "./tools/webview.js";
+import { registerAssertTools } from "./tools/assert.js";
+import { registerValidateTools } from "./tools/validate.js";
 import { prefetchDevices } from "./lib/simctl.js";
 import { getBackend } from "./lib/native.js";
 
 const server = new McpServer({
   name: "podium",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 registerHealthTool(server);
@@ -23,6 +25,8 @@ registerStepsTools(server);
 registerFlowTools(server);
 registerDebugTools(server);
 registerWebviewTools(server);
+registerAssertTools(server);
+registerValidateTools(server);
 
 // Fire-and-forget warm-ups: device-list cache + native-backend probe.
 // Neither blocks connect; the first tool calls hit warm state instead.

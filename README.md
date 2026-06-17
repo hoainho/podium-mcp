@@ -4,7 +4,7 @@
 
 **One baton. Every instrument.**
 
-A single stdio endpoint with **34 tools** for iOS-simulator device control, native UI automation, end-to-end flows, React Native debugging, and WebView DOM inspection — one connection instead of several.
+A single stdio endpoint with **43 tools** for iOS-simulator device control, native UI automation, end-to-end flows, React Native debugging, and WebView DOM inspection — one connection instead of several.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
@@ -12,6 +12,8 @@ A single stdio endpoint with **34 tools** for iOS-simulator device control, nati
 [![MCP](https://img.shields.io/badge/MCP-stdio-7C3AED)](https://modelcontextprotocol.io)
 [![Tests](https://img.shields.io/badge/tests-66%20passing-brightgreen.svg)](#development)
 [![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
+[![mcp.so](https://img.shields.io/badge/mcp.so-listed-7C3AED)](https://mcp.so/server/io.github.hoainho/podium-mcp)
+[![awesome-mcp-servers](https://img.shields.io/badge/awesome--mcp--servers-PR%20%238112-2EA44F)](https://github.com/punkpeye/awesome-mcp-servers/pull/8112)
 
 <br/>
 
@@ -33,7 +35,7 @@ A podium is where a maestro stands — one place to conduct the whole orchestra.
 - [Usage](#usage)
 - [Prompt playbook](#prompt-playbook)
 - [Capability coverage](#capability-coverage-the-5-requirements)
-- [Tool reference](#tool-reference-34-tools)
+- [Tool reference](#tool-reference-43-tools)
 - [Documented limits](#documented-limits-by-design-not-bugs)
 - [Architecture](#architecture)
 - [Development](#development)
@@ -84,7 +86,7 @@ Once installed, four skills are available directly in Claude Code:
 | Bug repro | `/podium-mcp:bug-repro <UDID> <BUNDLE_ID> <description>` | Video + logs + crash evidence capture |
 | RN debug | `/podium-mcp:rn-debug [UDID] [logs\|apps\|crash\|all]` | Metro logs, connected apps, crash reports |
 
-The plugin auto-starts the MCP server (all 34 tools) when enabled. No `.mcp.json` edits required.
+The plugin auto-starts the MCP server (all 43 tools) when enabled. No `.mcp.json` edits required.
 
 > **To submit this plugin to the Claude community marketplace** (for discovery without the `marketplace add` step), run `claude plugin validate .` then submit via the Console form:
 > [platform.claude.com/plugins/submit](https://platform.claude.com/plugins/submit) — Team/Enterprise orgs use [claude.ai/admin-settings/directory/submissions/plugins/new](https://claude.ai/admin-settings/directory/submissions/plugins/new).
@@ -141,9 +143,9 @@ validated against a real simulator. Start with
 | 2 | Control device | `app_launch/terminate/install/uninstall`, `tap_on`, `swipe`, `input_text`, `press_key`, `set_location`, `orientation_set`, `open_url` | ✅ tap, key, location, orientation all pass |
 | 3 | Screenshot / capture | `screenshot`, `record_start`/`record_stop` (video) | ✅ PNG + QuickTime `.mp4` |
 | 4 | Make e2e | `run_flow`, `inspect_screen`, `cheat_sheet` + gestures | ✅ flow pass with per-step results |
-| 5 | Everything behind one connection | all 34 tools below — device, automation, capture, debugging, and WebView inspection in a single endpoint | ✅ see [tool catalog](docs/tool-catalog.md) |
+| 5 | Everything behind one connection | all 43 tools below — device, automation, capture, debugging, and WebView inspection in a single endpoint | ✅ see [tool catalog](docs/tool-catalog.md) |
 
-## Tool reference (34 tools)
+## Tool reference (43 tools)
 
 | Tool | Key params | Backing engine | Failure behavior |
 |---|---|---|---|
@@ -176,12 +178,15 @@ validated against a real simulator. Start with
 | `webview_inspect` | udid, selector?, webviewId?, max? | `mobilecli` (CDP) | Resolves a CSS selector to DOM elements with absolute `tapX`/`tapY` for `tap_on`; first visible WebView when `webviewId` omitted |
 | `webview_eval` | udid, expression, webviewId? | `mobilecli` (CDP) | Evaluates JS in the WebView page context (read `location.href`, store state, balances) |
 | `webview_navigate` | udid, action (`goto`\|`back`\|`forward`\|`reload`), url?, webviewId? | `mobilecli` (CDP) | Drives WebView navigation |
+| `webview_network` | udid, webviewId?, durationMs?, format (`json`\|`har`)?, saveTo?, redact?, includeResources? | `mobilecli` (CDP) + in-page fetch/XHR shim + Performance Resource Timing | Captures HTTP traffic **inside** the WebView — the network-debug path for WebView-based apps, where `metro_network` (CDP Network domain) sees nothing. Merges live fetch/XHR (method/status/headers/body) with the browser's retroactive resource list (every request since navigation, incl. pre-capture) for a complete picture; exports redacted JSON or HAR 1.2 |
 | `metro_apps` | port? (8081) | GET `http://localhost:<port>/json` | Metro down → structured `metro not running` |
 | `metro_logs` | webSocketDebuggerUrl? / port?, durationMs?, maxLogs? | native WebSocket + CDP `Runtime.enable` | Auto-discovers first app when URL omitted |
+| `metro_network` | webSocketDebuggerUrl? / port?, durationMs?, maxEntries? | CDP `Network.enable` | Captured requests (url/method/status/mimeType/ts) |
+| `metro_state` | expression? / webSocketDebuggerUrl? / port?, timeoutMs? | CDP `Runtime.evaluate` | Reads in-app state (default Redux store) |
 | `crash_list` | processName?, sinceHours?, udid? | `~/Library/Logs/DiagnosticReports` + sim container | Empty list when dir unreadable |
 | `crash_get` | id, udid? | same | Path-traversal-safe (basename only); truncates honestly |
 
-> **WebView tools** (`webview_inspect`/`eval`/`navigate`) use the bundled `mobilecli` over CDP — not the idb or Maestro paths — and require the app's `WKWebView.isInspectable = true` (default in debug/staging builds; usually disabled in production App Store builds).
+> **WebView tools** (`webview_inspect`/`eval`/`navigate`/`network`) use the bundled `mobilecli` over CDP — not the idb or Maestro paths — and require the app's `WKWebView.isInspectable = true` (default in debug/staging builds; usually disabled in production App Store builds). `webview_network` captures the web layer's own fetch/XHR traffic (only requests made after capture starts), so it's the right tool for WebView-based apps whose API calls don't appear in `metro_network`.
 
 ### Native-first gesture backend
 
@@ -235,12 +240,28 @@ docs/               # tool catalog + e2e transcript
 ```bash
 npm run build       # tsc
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run (61 tests; exec/network layer mocked — no sim needed)
+npm test            # vitest run (unit/integration; exec/network layer mocked — no sim needed)
+node e2e/smoke.e2e.mjs   # real E2E against a booted iOS simulator (macOS + Xcode required)
 ```
 
 Standards: TypeScript strict, **no `as any` / `@ts-ignore`**, **no shell execution**
 (all commands via `lib/exec.ts`), tools return structured errors instead of throwing.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and the "add a new tool" checklist.
+
+**E2E:** two real-device suites run against a booted simulator (macOS + Xcode), nightly +
+on-demand via the [`E2E (simulator)`](.github/workflows/e2e-sim.yml) workflow (not a PR gate):
+- `e2e/smoke.e2e.mjs` — device-control smoke (boot/screenshot/screen_size/app_list).
+- `e2e/full-smoke.e2e.mjs` — drives **all 36 tool handlers**, asserting the happy path where a
+  target exists (gestures, capture, Maestro flows, recording) and the **real structured-error
+  path** where a dependency is absent (WebView needs a debug `isInspectable` app; `metro_*`
+  need a connected RN app). WebView/Metro *happy* paths require such an app and are verified
+  only when one is present — otherwise their error paths are.
+
+**Releasing to the MCP Registry:** `server.json` is the registry manifest. Pushing a `v*` tag
+runs [`Publish to npm`](.github/workflows/publish-npm.yml) then
+[`Publish to MCP Registry`](.github/workflows/publish-mcp-registry.yml) (GitHub OIDC auth for the
+`io.github.hoainho/*` namespace — no token needed). The registry publish only succeeds once the
+matching npm version is live.
 
 ## Full tool catalog
 
@@ -256,7 +277,7 @@ See [`docs/e2e-demo.md`](docs/e2e-demo.md) for a real transcript against a boote
 
 podium-mcp is built around a few deliberate principles:
 
-- **One podium, one connection.** A single server fronts every mobile capability — device, UI, flows, capture, debugging, and WebView inspection — so an agent configures one endpoint and discovers all 34 tools at once, instead of stitching together several servers.
+- **One podium, one connection.** A single server fronts every mobile capability — device, UI, flows, capture, debugging, and WebView inspection — so an agent configures one endpoint and discovers all 43 tools at once, instead of stitching together several servers.
 - **Safe by construction.** Every external command runs through an `execFile` layer with an explicit argument array — never a shell string — so tool inputs (udids, paths, selectors, flow YAML) can't be interpreted as commands.
 - **Never crash the conductor.** Tools return structured results and errors instead of throwing; one bad call can't take the server down.
 - **Degrade, don't fail.** A missing toolchain (e.g. Android's `adb`) yields an informative result rather than a hard error.

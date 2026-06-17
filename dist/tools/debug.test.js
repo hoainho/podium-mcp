@@ -25,21 +25,24 @@ describe("app_state", () => {
     beforeEach(() => {
         vi.restoreAllMocks();
     });
-    it("returns installed:true running:true when both commands confirm the app", async () => {
-        vi.spyOn(exec, "run").mockImplementation(async (_cmd, args) => {
-            if (args.includes("listapps")) {
-                return {
-                    code: 0,
-                    stdout: `{ "com.example.MyApp": { "CFBundleIdentifier": "com.example.MyApp" } }`,
-                    stderr: "",
-                };
+    // app_state resolves `installed` via listApps() (xcrun listapps → plutil → JSON),
+    // so the mock must satisfy both the listapps and plutil calls, plus launchctl.
+    function mockAppState(opts) {
+        vi.spyOn(exec, "run").mockImplementation(async (cmd, args) => {
+            if (cmd === "xcrun" && args.includes("listapps")) {
+                return { code: opts.listappsCode ?? 0, stdout: "FAKE_PLIST", stderr: "" };
             }
-            // launchctl list
-            return {
-                code: 0,
-                stdout: `- 0 UIKitApplication:com.example.MyApp[0x1234]`,
-                stderr: "",
-            };
+            if (cmd === "plutil") {
+                return { code: 0, stdout: JSON.stringify(opts.apps), stderr: "" };
+            }
+            // xcrun simctl spawn <udid> launchctl list
+            return { code: 0, stdout: opts.launchctlStdout, stderr: "" };
+        });
+    }
+    it("returns installed:true running:true when both commands confirm the app", async () => {
+        mockAppState({
+            apps: { "com.example.MyApp": { CFBundleDisplayName: "My App" } },
+            launchctlStdout: "- 0 UIKitApplication:com.example.MyApp[0x1234]",
         });
         const fake = await buildServer();
         const handler = fake._handlers.get("app_state");
@@ -54,15 +57,9 @@ describe("app_state", () => {
         expect(payload.running).toBe(true);
     });
     it("returns installed:true running:false when app is installed but not running", async () => {
-        vi.spyOn(exec, "run").mockImplementation(async (_cmd, args) => {
-            if (args.includes("listapps")) {
-                return {
-                    code: 0,
-                    stdout: `com.example.MyApp`,
-                    stderr: "",
-                };
-            }
-            return { code: 0, stdout: "- 0 SomeOtherApp[0x1234]", stderr: "" };
+        mockAppState({
+            apps: { "com.example.MyApp": {} },
+            launchctlStdout: "- 0 UIKitApplication:com.other.app[0x1234]",
         });
         const fake = await buildServer();
         const handler = fake._handlers.get("app_state");
@@ -75,10 +72,9 @@ describe("app_state", () => {
         expect(payload.running).toBe(false);
     });
     it("returns installed:false running:false when app is absent", async () => {
-        vi.spyOn(exec, "run").mockResolvedValue({
-            code: 0,
-            stdout: "com.other.app",
-            stderr: "",
+        mockAppState({
+            apps: { "com.other.app": {} },
+            launchctlStdout: "- 0 UIKitApplication:com.other.app[0x1]",
         });
         const fake = await buildServer();
         const handler = fake._handlers.get("app_state");
@@ -91,10 +87,10 @@ describe("app_state", () => {
         expect(payload.running).toBe(false);
     });
     it("returns installed:false when listapps fails", async () => {
-        vi.spyOn(exec, "run").mockResolvedValue({
-            code: 1,
-            stdout: "",
-            stderr: "Device not found",
+        mockAppState({
+            apps: {},
+            launchctlStdout: "",
+            listappsCode: 1,
         });
         const fake = await buildServer();
         const handler = fake._handlers.get("app_state");
@@ -105,6 +101,201 @@ describe("app_state", () => {
         const payload = JSON.parse(response.content[0].text);
         expect(payload.installed).toBe(false);
         expect(payload.running).toBe(false);
+    });
+    // Q1 regression: a prefix bundle id must NOT be reported as installed/running
+    // when only a longer id sharing that prefix is present.
+    it("does not false-positive when queried id is a prefix of a different app", async () => {
+        mockAppState({
+            apps: { "com.example.AppExtension": { CFBundleDisplayName: "Ext" } },
+            launchctlStdout: "- 0 UIKitApplication:com.example.AppExtension[0x9]",
+        });
+        const fake = await buildServer();
+        const handler = fake._handlers.get("app_state");
+        const response = await handler({
+            udid: "74DD7D29-38BC-4B82-B92A-FFA7E0C15F74",
+            bundleId: "com.example.App",
+        });
+        const payload = JSON.parse(response.content[0].text);
+        expect(payload.installed).toBe(false);
+        expect(payload.running).toBe(false);
+    });
+});
+// ─── metro_network tests (V2-2) ───────────────────────────────────────────────
+describe("foldNetworkEvents", () => {
+    it("merges requestWillBeSent + responseReceived by requestId", () => {
+        const entries = metro.foldNetworkEvents([
+            {
+                method: "Network.requestWillBeSent",
+                params: { requestId: "1", timestamp: 100, request: { url: "https://api.test/x", method: "POST" } },
+            },
+            {
+                method: "Network.responseReceived",
+                params: { requestId: "1", response: { status: 200, mimeType: "application/json" } },
+            },
+        ]);
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({
+            requestId: "1",
+            url: "https://api.test/x",
+            method: "POST",
+            status: 200,
+            mimeType: "application/json",
+            ts: 100,
+        });
+    });
+    it("captures richer HAR fields (headers, timing, wallTime, postData)", () => {
+        const entries = metro.foldNetworkEvents([
+            {
+                method: "Network.requestWillBeSent",
+                params: {
+                    requestId: "9",
+                    timestamp: 1,
+                    wallTime: 1700,
+                    request: { url: "https://api.test/x", method: "POST", headers: { Authorization: "Bearer T" }, postData: "{}" },
+                },
+            },
+            {
+                method: "Network.responseReceived",
+                params: {
+                    requestId: "9",
+                    response: { status: 200, mimeType: "application/json", headers: { "Set-Cookie": "a=b" }, timing: { dnsStart: 0, dnsEnd: 2 }, encodedDataLength: 50 },
+                },
+            },
+        ]);
+        expect(entries).toHaveLength(1);
+        const e = entries[0];
+        expect(e.requestHeaders?.Authorization).toBe("Bearer T");
+        expect(e.responseHeaders?.["Set-Cookie"]).toBe("a=b");
+        expect(e.timing?.dnsEnd).toBe(2);
+        expect(e.wallTime).toBe(1700);
+        expect(e.postData).toBe("{}");
+    });
+    it("keeps distinct requestIds separate and tolerates response-before-request", () => {
+        const entries = metro.foldNetworkEvents([
+            { method: "Network.responseReceived", params: { requestId: "2", response: { status: 404, url: "https://api.test/y" } } },
+            { method: "Network.requestWillBeSent", params: { requestId: "3", timestamp: 5, request: { url: "https://api.test/z", method: "GET" } } },
+        ]);
+        expect(entries).toHaveLength(2);
+        const r2 = entries.find((e) => e.requestId === "2");
+        expect(r2?.status).toBe(404);
+        const r3 = entries.find((e) => e.requestId === "3");
+        expect(r3?.method).toBe("GET");
+        expect(r3?.status).toBeUndefined(); // never responded in window
+    });
+});
+describe("metro_network tool", () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+    it("returns count + requests from readNetwork when a ws url is given", async () => {
+        vi.spyOn(metro, "readNetwork").mockResolvedValue({
+            requests: [
+                { requestId: "1", url: "https://api.test/a", method: "GET", status: 200, mimeType: "application/json", ts: 1 },
+            ],
+        });
+        const fake = await buildServer();
+        const handler = fake._handlers.get("metro_network");
+        const res = await handler({ webSocketDebuggerUrl: "ws://localhost:8081/x" });
+        expect(res.isError).toBeUndefined();
+        const payload = JSON.parse(res.content[0].text);
+        expect(payload.count).toBe(1);
+        expect(payload.requests[0].status).toBe(200);
+    });
+    it("returns a structured error when readNetwork fails", async () => {
+        vi.spyOn(metro, "readNetwork").mockResolvedValue({ error: "WebSocket connection failed" });
+        const fake = await buildServer();
+        const handler = fake._handlers.get("metro_network");
+        const res = await handler({ webSocketDebuggerUrl: "ws://localhost:8081/x" });
+        expect(res.isError).toBe(true);
+        expect(res.content[0].text).toContain("WebSocket connection failed");
+    });
+    it("DEFAULT format:'json' also redacts sensitive headers + postData (no token survives)", async () => {
+        vi.spyOn(metro, "readNetwork").mockResolvedValue({
+            requests: [
+                {
+                    requestId: "1",
+                    url: "https://api.test/a",
+                    method: "POST",
+                    status: 200,
+                    ts: 1,
+                    requestHeaders: { Authorization: "Bearer LEAK", Accept: "*/*" },
+                    responseHeaders: { "Set-Cookie": "sid=SECRET" },
+                    postData: "password=hunter2",
+                },
+            ],
+        });
+        const fake = await buildServer();
+        const res = await fake._handlers.get("metro_network")({ webSocketDebuggerUrl: "ws://localhost:8081/x" });
+        expect(res.isError).toBeUndefined();
+        expect(res.content[0].text).not.toContain("LEAK");
+        expect(res.content[0].text).not.toContain("SECRET");
+        expect(res.content[0].text).not.toContain("hunter2");
+        const payload = JSON.parse(res.content[0].text);
+        expect(payload.redacted).toBe(true);
+        expect(payload.requests[0].requestHeaders.Accept).toBe("*/*"); // non-sensitive preserved
+    });
+    it("format:'har' emits a redacted HAR 1.2 log (no token survives)", async () => {
+        vi.spyOn(metro, "readNetwork").mockResolvedValue({
+            requests: [
+                {
+                    requestId: "1",
+                    url: "https://api.test/a",
+                    method: "GET",
+                    status: 200,
+                    mimeType: "application/json",
+                    ts: 1,
+                    requestHeaders: { Authorization: "Bearer LEAK" },
+                },
+            ],
+        });
+        const fake = await buildServer();
+        const handler = fake._handlers.get("metro_network");
+        const res = await handler({ webSocketDebuggerUrl: "ws://localhost:8081/x", format: "har" });
+        expect(res.isError).toBeUndefined();
+        expect(res.content[0].text).not.toContain("LEAK");
+        const payload = JSON.parse(res.content[0].text);
+        expect(payload.format).toBe("har");
+        expect(payload.redacted).toBe(true);
+        expect(payload.har.log.version).toBe("1.2");
+    });
+});
+// ─── metro_state tests (V2-8) ──────────────────────────────────────────────────
+describe("parseEvalResponse", () => {
+    it("extracts a returnByValue value", () => {
+        expect(metro.parseEvalResponse({ result: { result: { value: { count: 3 } } } })).toEqual({
+            value: { count: 3 },
+        });
+    });
+    it("falls back to description when no value", () => {
+        expect(metro.parseEvalResponse({ result: { result: { description: "fn() {}" } } })).toEqual({
+            value: "fn() {}",
+        });
+    });
+    it("returns an error on exceptionDetails", () => {
+        const r = metro.parseEvalResponse({ result: { exceptionDetails: { text: "ReferenceError: store" } } });
+        expect("error" in r && r.error).toMatch(/ReferenceError/);
+    });
+});
+describe("metro_state tool", () => {
+    beforeEach(() => vi.restoreAllMocks());
+    it("returns the evaluated value", async () => {
+        vi.spyOn(metro, "evalRuntime").mockResolvedValue({ value: { user: { id: 1 } } });
+        const fake = await buildServer();
+        const res = await fake._handlers.get("metro_state")({
+            webSocketDebuggerUrl: "ws://localhost:8081/x",
+            expression: "store.getState()",
+        });
+        expect(res.isError).toBeUndefined();
+        const payload = JSON.parse(res.content[0].text);
+        expect(payload.value.user.id).toBe(1);
+        expect(payload.expression).toBe("store.getState()");
+    });
+    it("returns a structured error when evaluation fails", async () => {
+        vi.spyOn(metro, "evalRuntime").mockResolvedValue({ error: "Runtime.evaluate timed out after 5000ms" });
+        const fake = await buildServer();
+        const res = await fake._handlers.get("metro_state")({ webSocketDebuggerUrl: "ws://localhost:8081/x" });
+        expect(res.isError).toBe(true);
+        expect(res.content[0].text).toContain("timed out");
     });
 });
 // ─── crash listing tests ──────────────────────────────────────────────────────
