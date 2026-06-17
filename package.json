@@ -1,0 +1,56 @@
+{
+  "name": "podium-mcp",
+  "version": "0.1.0",
+  "description": "Unified mobile E2E MCP server — one stdio server (28 tools) for iOS-simulator device control, UI automation, end-to-end flows, and React Native debugging.",
+  "type": "module",
+  "license": "MIT",
+  "author": "hoainho <nhoxtvt@gmail.com>",
+  "homepage": "https://github.com/hoainho/podium-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hoainho/podium-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hoainho/podium-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "maestro",
+    "mobile-automation",
+    "react-native",
+    "ios-simulator",
+    "e2e",
+    "automation",
+    "simctl",
+    "metro"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "benchmark": "npm run build && node --experimental-strip-types scripts/benchmark.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "mobilecli": "^0.3.79",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.2"
+  },
+  "main": "dist/index.js",
+  "bin": {
+    "podium-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ]
+}

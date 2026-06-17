@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "podium": {
+      "command": "npx",
+      "args": ["-y", "podium-mcp@latest"]
+    }
+  }
+}

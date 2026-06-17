@@ -1,0 +1,26 @@
+{
+  "name": "podium-mcp",
+  "description": "Unified mobile E2E MCP server — 34 tools for iOS-simulator device control, native UI automation, end-to-end Maestro flows, React Native debugging, and WebView DOM inspection. Requires macOS + Xcode.",
+  "version": "0.1.0",
+  "author": {
+    "name": "hoainho",
+    "email": "nhoxtvt@gmail.com",
+    "url": "https://github.com/hoainho"
+  },
+  "homepage": "https://github.com/hoainho/podium-mcp",
+  "repository": "https://github.com/hoainho/podium-mcp",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "maestro",
+    "mobilecli",
+    "mobile-automation",
+    "react-native",
+    "ios-simulator",
+    "webview",
+    "e2e",
+    "simctl"
+  ]
+}
