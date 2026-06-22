@@ -39,12 +39,12 @@ describe("health tool output shape", () => {
 
     const payload = {
       name: "podium-mcp",
-      version: "0.1.0",
+      version: "0.2.0",
       toolchain: { xcrun, maestro, adb },
     };
 
     expect(payload.name).toBe("podium-mcp");
-    expect(payload.version).toBe("0.1.0");
+    expect(payload.version).toBe("0.2.0");
     expect(typeof payload.toolchain.xcrun).toBe("boolean");
     expect(typeof payload.toolchain.maestro).toBe("boolean");
     expect(typeof payload.toolchain.adb).toBe("boolean");

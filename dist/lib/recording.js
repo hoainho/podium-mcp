@@ -1,6 +1,15 @@
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 const registry = new Map();
+/**
+ * Hard cap on a single recording's duration. Without it, a record_start that is
+ * never paired with record_stop (agent crash, forgotten flow) writes until the
+ * disk fills. Override with PODIUM_MAX_RECORDING_MS; set to 0 to disable.
+ */
+function maxRecordingMs() {
+    const raw = Number(process.env.PODIUM_MAX_RECORDING_MS);
+    return Number.isFinite(raw) && raw >= 0 ? raw : 600_000;
+}
 /** Exposed for tests — returns the number of active recording entries. */
 export function activeRecordings() {
     return registry.size;
@@ -19,7 +28,23 @@ export async function startRecording(udid, savePath) {
         return { ok: false, error: "failed to spawn recordVideo process — pid is undefined" };
     }
     child.unref();
-    registry.set(udid, { pid: child.pid, path: savePath });
+    // Watchdog: finalize and drop the recording if record_stop is never called.
+    const maxMs = maxRecordingMs();
+    let watchdog;
+    if (maxMs > 0) {
+        const pid = child.pid;
+        watchdog = setTimeout(() => {
+            try {
+                process.kill(pid, "SIGINT");
+            }
+            catch {
+                // already gone — nothing to stop
+            }
+            registry.delete(udid);
+        }, maxMs);
+        watchdog.unref();
+    }
+    registry.set(udid, { pid: child.pid, path: savePath, watchdog });
     return { ok: true, path: savePath, pid: child.pid };
 }
 /**
@@ -33,6 +58,8 @@ export async function stopRecording(udid) {
         return { ok: false, error: `no active recording for ${udid}` };
     }
     registry.delete(udid);
+    if (entry.watchdog)
+        clearTimeout(entry.watchdog);
     try {
         process.kill(entry.pid, "SIGINT");
     }

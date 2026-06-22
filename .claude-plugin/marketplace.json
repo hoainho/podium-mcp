@@ -11,7 +11,7 @@
     {
       "name": "podium-mcp",
       "displayName": "Podium MCP",
-      "description": "Unified mobile E2E MCP server — 28 tools for iOS-simulator device control, UI automation, end-to-end Maestro flows, and React Native debugging.",
+      "description": "Unified mobile E2E MCP server — 43 tools for iOS-simulator device control, UI automation, end-to-end Maestro flows, React Native debugging, and WebView DOM inspection.",
       "author": {
         "name": "hoainho",
         "url": "https://github.com/hoainho"

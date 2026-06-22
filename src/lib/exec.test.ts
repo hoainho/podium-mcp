@@ -30,3 +30,20 @@ describe("run — no shell interpretation", () => {
     expect(result.stdout).toBe("a | cat > /tmp/podium-pipe");
   });
 });
+
+// Regression for R2: a command that exceeds its timeout must surface a non-zero
+// code AND timedOut:true so callers can tell "timed out, retry longer" apart
+// from a genuine command failure.
+describe("run — timeout handling", () => {
+  it("returns code!=0 and timedOut:true when the command exceeds its timeout", async () => {
+    const result = await run("sleep", ["2"], { timeout: 100 });
+    expect(result.code).not.toBe(0);
+    expect(result.timedOut).toBe(true);
+  });
+
+  it("returns timedOut:false on a normal fast command", async () => {
+    const result = await run("echo", ["hi"], { timeout: 5000 });
+    expect(result.code).toBe(0);
+    expect(result.timedOut).toBe(false);
+  });
+});

@@ -69,23 +69,25 @@ export async function install(udid, appPath) {
     return toResult(await run(XCRUN, ["simctl", "install", udid, appPath], { timeout: 60_000 }));
 }
 export async function launch(udid, bundleId) {
-    return toResult(await run(XCRUN, ["simctl", "launch", udid, bundleId]));
+    // Cold launch (first run after install, or a RN app loading its Metro bundle)
+    // routinely exceeds the 5s exec default — give it 30s.
+    return toResult(await run(XCRUN, ["simctl", "launch", udid, bundleId], { timeout: 30_000 }));
 }
 export async function terminate(udid, bundleId) {
-    return toResult(await run(XCRUN, ["simctl", "terminate", udid, bundleId]));
+    return toResult(await run(XCRUN, ["simctl", "terminate", udid, bundleId], { timeout: 15_000 }));
 }
 export async function screenshot(udid, outPath) {
     return toResult(await run(XCRUN, ["simctl", "io", udid, "screenshot", outPath], { timeout: 15_000 }));
 }
 export async function openUrl(udid, url) {
-    return toResult(await run(XCRUN, ["simctl", "openurl", udid, url]));
+    return toResult(await run(XCRUN, ["simctl", "openurl", udid, url], { timeout: 15_000 }));
 }
 /**
  * Sets the simulated GPS location on a running simulator.
  * Args are forwarded as `xcrun simctl location <udid> set <lat>,<lon>`.
  */
 export async function setLocation(udid, lat, lon) {
-    return toResult(await run(XCRUN, ["simctl", "location", udid, "set", `${lat},${lon}`]));
+    return toResult(await run(XCRUN, ["simctl", "location", udid, "set", `${lat},${lon}`], { timeout: 15_000 }));
 }
 /**
  * Returns the list of installed apps on a booted simulator.

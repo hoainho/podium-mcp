@@ -5,12 +5,16 @@ import { stat } from "node:fs/promises";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   getBackend,
-  findElements,
-  elementCenter,
   type NativeBackend,
 } from "../lib/native.js";
-import { nativeTap, resolveForegroundApp } from "../lib/gesture.js";
-import { runMaestroFlow } from "../lib/maestro.js";
+import {
+  nativeTap,
+  nativeKey,
+  nativeInputText,
+  nativeSwipe,
+  nativeTapText,
+} from "../lib/gesture.js";
+import { pollVisible } from "../lib/oracle.js";
 import { screenshot as simctlScreenshot } from "../lib/simctl.js";
 import { okResult } from "../lib/result.js";
 
@@ -38,18 +42,14 @@ const KEY_VALUES = [
   "tab",
 ] as const;
 
-/** Capitalize for the Maestro YAML ("enter" → "Enter"); Maestro matches case-insensitively. */
-function fmtKey(k: string): string {
-  return k.charAt(0).toUpperCase() + k.slice(1);
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ─── Step schema (discriminated union on `action`) ────────────────────────────
 
-const stepSchema = z.discriminatedUnion("action", [
+// Blessed as the canonical action vocabulary (IR) — also consumed by the Maestro exporter.
+export const stepSchema = z.discriminatedUnion("action", [
   z
     .object({
       action: z.literal("tap"),
@@ -60,7 +60,7 @@ const stepSchema = z.discriminatedUnion("action", [
   z
     .object({
       action: z.literal("tapText"),
-      text: z.string().optional().describe("Element text/regex (Maestro semantics)"),
+      text: z.string().optional().describe("Element text/regex. Matches the FULL label/value case-insensitively (anchored ^…$); an invalid regex falls back to a substring match."),
       id: z.string().optional().describe("Accessibility id"),
       index: z.number().int().min(0).optional().describe("Index when multiple match"),
     })
@@ -119,7 +119,7 @@ const stepSchema = z.discriminatedUnion("action", [
     .describe("Assert text is visible (short poll); fails the step if absent."),
 ]);
 
-type Step = z.infer<typeof stepSchema>;
+export type Step = z.infer<typeof stepSchema>;
 
 interface StepResult {
   i: number;
@@ -128,40 +128,8 @@ interface StepResult {
   [k: string]: unknown;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Poll the native element tree (or a one-shot Maestro assert) until `text` is visible. */
-async function pollVisible(
-  udid: string,
-  be: NativeBackend | null,
-  text: string,
-  timeoutMs: number,
-  bundleId?: string
-): Promise<boolean> {
-  const start = Date.now();
-  for (;;) {
-    if (be) {
-      const els = await be.describeAll(udid);
-      if (els && findElements(els, { text }).length > 0) return true;
-    } else {
-      const appId = bundleId ?? (await resolveForegroundApp(udid));
-      if (appId) {
-        const yaml = `appId: ${appId}\n---\n- assertVisible: ${JSON.stringify(text)}`;
-        const m = await runMaestroFlow({ udid, yaml, timeoutMs: 5_000 }).catch(() => null);
-        if (m?.passed) return true;
-      }
-    }
-    if (Date.now() - start >= timeoutMs) return false;
-    await sleep(400);
-  }
-}
-
-/** appId for a Maestro fallback: explicit bundleId, else the foreground app. */
-async function appIdFor(udid: string, bundleId?: string): Promise<string | null> {
-  return bundleId ?? (await resolveForegroundApp(udid));
-}
-
 // ─── Step executor ──────────────────────────────────────────────────────────
+// (visibility polling lives in lib/oracle.ts — pollVisible, shared with assert_*)
 
 async function execStep(
   udid: string,
@@ -177,150 +145,43 @@ async function execStep(
     }
 
     case "tapText": {
-      if (!step.text && !step.id) {
-        return { i, action: "tapText", ok: false, error: "tapText requires text or id" };
-      }
-      // Native: resolve element center, then native tap.
-      if (be) {
-        const els = await be.describeAll(udid);
-        if (els) {
-          const match = findElements(els, { text: step.text, id: step.id })[step.index ?? 0];
-          const pt = match ? elementCenter(match) : null;
-          if (pt) {
-            const r = await be.tap(udid, pt.x, pt.y);
-            if (r.code === 0) {
-              return { i, action: "tapText", ok: true, backend: be.name, tappedAt: pt };
-            }
-          }
-        }
-      }
-      // Maestro fallback.
-      const appId = await appIdFor(udid, bundleId);
-      if (!appId) {
-        return {
-          i,
-          action: "tapText",
-          ok: false,
-          error:
-            "element not found natively and no appId for Maestro fallback — pass bundleId or use {action:'tap', x, y}",
-        };
-      }
-      const selector =
-        step.text && step.id
-          ? `{ text: ${JSON.stringify(step.text)}, id: ${JSON.stringify(step.id)}${step.index !== undefined ? `, index: ${step.index}` : ""} }`
-          : step.text
-            ? step.index !== undefined
-              ? `{ text: ${JSON.stringify(step.text)}, index: ${step.index} }`
-              : JSON.stringify(step.text)
-            : `{ id: ${JSON.stringify(step.id!)} }`;
-      const yaml = [`appId: ${appId}`, `---`, `- tapOn: ${selector}`].join("\n");
-      const m = await runMaestroFlow({ udid, yaml, timeoutMs: 30_000 });
-      return m.passed
-        ? { i, action: "tapText", ok: true, backend: "maestro", selector }
-        : { i, action: "tapText", ok: false, backend: "maestro", error: m.rawOutput.slice(0, 200) };
+      const g = await nativeTapText(udid, { text: step.text, id: step.id, index: step.index }, { bundleId });
+      const res: StepResult = { i, action: "tapText", ok: g.ok, backend: g.backend };
+      if (g.tappedAt) res.tappedAt = g.tappedAt;
+      if (g.selector) res.selector = g.selector;
+      if (!g.ok && g.detail) res.error = g.detail;
+      return res;
     }
 
     case "type": {
-      if (be) {
-        const r = await be.inputText(udid, step.text);
-        if (r.code === 0) {
-          if (!step.submit) return { i, action: "type", ok: true, backend: be.name };
-          if (be.canPressKey("enter")) {
-            const k = await be.pressKey(udid, "enter");
-            if (k && k.code === 0) return { i, action: "type", ok: true, backend: be.name, submit: true };
-          }
-          const appId = await appIdFor(udid, bundleId);
-          if (appId) {
-            const m = await runMaestroFlow({
-              udid,
-              yaml: `appId: ${appId}\n---\n- pressKey: "Enter"`,
-              timeoutMs: 15_000,
-            });
-            return { i, action: "type", ok: m.passed, backend: `${be.name}+maestro`, submit: true };
-          }
-          return {
-            i,
-            action: "type",
-            ok: true,
-            backend: be.name,
-            submit: false,
-            detail: "typed; Enter skipped (no native mapping and no appId)",
-          };
-        }
-      }
-      // Maestro fallback.
-      const appId = await appIdFor(udid, bundleId);
-      if (!appId) {
-        return { i, action: "type", ok: false, error: "native inputText unavailable and no appId for Maestro fallback" };
-      }
-      const lines = [`appId: ${appId}`, `---`, `- inputText: ${JSON.stringify(step.text)}`];
-      if (step.submit) lines.push(`- pressKey: "Enter"`);
-      const m = await runMaestroFlow({ udid, yaml: lines.join("\n"), timeoutMs: 30_000 });
-      return m.passed
-        ? { i, action: "type", ok: true, backend: "maestro", submit: step.submit ?? false }
-        : { i, action: "type", ok: false, backend: "maestro", error: m.rawOutput.slice(0, 200) };
+      const g = await nativeInputText(udid, step.text, { submit: step.submit, bundleId });
+      const res: StepResult = { i, action: "type", ok: g.ok, backend: g.backend };
+      if (g.submit !== undefined) res.submit = g.submit;
+      if (g.ok && g.detail) res.detail = g.detail;
+      if (!g.ok && g.detail) res.error = g.detail;
+      return res;
     }
 
     case "key": {
-      if (be && be.canPressKey(step.key)) {
-        const r = await be.pressKey(udid, step.key);
-        if (r && r.code === 0) return { i, action: "key", ok: true, backend: be.name, key: step.key };
-      }
-      const appId = await appIdFor(udid, bundleId);
-      if (!appId) {
-        return { i, action: "key", ok: false, key: step.key, error: "no native mapping and no appId for Maestro fallback" };
-      }
-      const m = await runMaestroFlow({
-        udid,
-        yaml: `appId: ${appId}\n---\n- pressKey: ${JSON.stringify(fmtKey(step.key))}`,
-        timeoutMs: 15_000,
-      });
-      return m.passed
-        ? { i, action: "key", ok: true, backend: "maestro", key: step.key }
-        : { i, action: "key", ok: false, backend: "maestro", key: step.key, error: m.rawOutput.slice(0, 200) };
+      const g = await nativeKey(udid, step.key, { bundleId });
+      const res: StepResult = { i, action: "key", ok: g.ok, backend: g.backend, key: step.key };
+      if (!g.ok && g.detail) res.error = g.detail;
+      return res;
     }
 
     case "swipe": {
-      if (be) {
-        const dims = await be.screenPoints(udid);
-        if (dims) {
-          let pts: { x1: number; y1: number; x2: number; y2: number } | null = null;
-          if (
-            step.startX !== undefined &&
-            step.startY !== undefined &&
-            step.endX !== undefined &&
-            step.endY !== undefined
-          ) {
-            pts = { x1: step.startX, y1: step.startY, x2: step.endX, y2: step.endY };
-          } else {
-            const dir = step.direction ?? "up";
-            const cx = dims.w / 2;
-            const cy = dims.h / 2;
-            pts =
-              dir === "up"
-                ? { x1: cx, y1: dims.h * 0.7, x2: cx, y2: dims.h * 0.3 }
-                : dir === "down"
-                  ? { x1: cx, y1: dims.h * 0.3, x2: cx, y2: dims.h * 0.7 }
-                  : dir === "left"
-                    ? { x1: dims.w * 0.8, y1: cy, x2: dims.w * 0.2, y2: cy }
-                    : { x1: dims.w * 0.2, y1: cy, x2: dims.w * 0.8, y2: cy };
-          }
-          const r = await be.swipe(udid, pts.x1, pts.y1, pts.x2, pts.y2);
-          if (r.code === 0) return { i, action: "swipe", ok: true, backend: be.name, points: pts };
-        }
-      }
-      const appId = await appIdFor(udid, bundleId);
-      if (!appId) {
-        return { i, action: "swipe", ok: false, error: "native swipe unavailable and no appId for Maestro fallback" };
-      }
-      const swipeLine =
-        step.startX !== undefined && step.startY !== undefined && step.endX !== undefined && step.endY !== undefined
-          ? `- swipe:\n    start: "${step.startX},${step.startY}"\n    end: "${step.endX},${step.endY}"`
-          : `- swipe:\n    direction: ${(step.direction ?? "up").toUpperCase()}`;
-      const m = await runMaestroFlow({ udid, yaml: `appId: ${appId}\n---\n${swipeLine}`, timeoutMs: 30_000 });
-      return m.passed
-        ? { i, action: "swipe", ok: true, backend: "maestro" }
-        : { i, action: "swipe", ok: false, backend: "maestro", error: m.rawOutput.slice(0, 200) };
+      const points =
+        step.startX !== undefined &&
+        step.startY !== undefined &&
+        step.endX !== undefined &&
+        step.endY !== undefined
+          ? { x1: step.startX, y1: step.startY, x2: step.endX, y2: step.endY }
+          : undefined;
+      const g = await nativeSwipe(udid, { direction: step.direction, points }, { bundleId });
+      const res: StepResult = { i, action: "swipe", ok: g.ok, backend: g.backend };
+      if (g.points) res.points = g.points;
+      if (!g.ok && g.detail) res.error = g.detail;
+      return res;
     }
 
     case "waitFor": {
@@ -372,7 +233,10 @@ export function registerStepsTools(server: McpServer): void {
       "Prefer `waitFor` over `waitMs` to act the instant the UI is ready instead of sleeping. " +
       "WebView note: web-rendered text is invisible to tapText — use tap {x,y} for it; `type` " +
       "uses real keystrokes so React onChange fires. Stops at the first failed step unless " +
-      "stopOnError:false. bundleId is only needed for the Maestro fallback (auto-detected otherwise).",
+      "stopOnError:false. bundleId is only needed for the Maestro fallback (auto-detected otherwise). " +
+      "When to use: pick run_steps for >2 known sequential gestures (login, navigation, form fill); " +
+      "use run_flow for Maestro assertions/conditionals/loops/retries; use the individual gesture " +
+      "tools (tap_on, swipe, …) for a single exploratory action.",
     {
       udid: z.string().describe("Simulator / device UDID (from device_list)"),
       bundleId: z

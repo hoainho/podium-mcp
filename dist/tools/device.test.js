@@ -329,4 +329,45 @@ describe("recording module", () => {
         // Clean up registry
         await recording.stopRecording(udid).catch(() => undefined);
     }, 15_000);
+    // R3: a duration watchdog must auto-finalize a recording that is never stopped,
+    // so a forgotten record_start can't write until the disk fills.
+    it("auto-stops the recording after PODIUM_MAX_RECORDING_MS (watchdog)", async () => {
+        const prev = process.env.PODIUM_MAX_RECORDING_MS;
+        process.env.PODIUM_MAX_RECORDING_MS = "300";
+        const udid = `recording-watchdog-${Date.now()}`;
+        const savePath = `/tmp/podium-watchdog-${Date.now()}.mp4`;
+        try {
+            const r = await recording.startRecording(udid, savePath);
+            expect(r.ok).toBe(true);
+            expect(recording.activeRecordings()).toBeGreaterThanOrEqual(1);
+            // Wait past the 300ms watchdog window.
+            await new Promise((res) => setTimeout(res, 700));
+            // Watchdog fired → entry dropped from the registry.
+            expect(recording.activeRecordings()).toBe(0);
+        }
+        finally {
+            await recording.stopRecording(udid).catch(() => undefined);
+            if (prev === undefined)
+                delete process.env.PODIUM_MAX_RECORDING_MS;
+            else
+                process.env.PODIUM_MAX_RECORDING_MS = prev;
+        }
+    }, 15_000);
+    // R3: the default record_start path is timestamped, so start→stop→start does
+    // not reuse the same file path.
+    it("record_start default path is timestamped and unique across calls", async () => {
+        const { registerDeviceTools } = await import("./device.js");
+        const fake = makeFakeServer();
+        registerDeviceTools(fake);
+        const handler = fake._handlers.get("record_start");
+        const udid = `recording-defpath-${Date.now()}`;
+        const r1 = await handler({ udid });
+        const p1 = JSON.parse(r1.content[0].text).path;
+        expect(p1).toMatch(/podium-recording-.*-\d+\.mp4$/);
+        await recording.stopRecording(udid).catch(() => undefined);
+        const r2 = await handler({ udid });
+        const p2 = JSON.parse(r2.content[0].text).path;
+        await recording.stopRecording(udid).catch(() => undefined);
+        expect(p2).not.toBe(p1);
+    }, 30_000);
 });

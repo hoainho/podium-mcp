@@ -30,7 +30,7 @@ export function registerDeviceTools(server: McpServer): void {
   // ─── device_list ────────────────────────────────────────────────────────────
   server.tool(
     "device_list",
-    "Returns a merged inventory of available iOS simulators (udid, name, state, runtime) and Android devices. If adb is absent, the android section reports availability: false instead of failing.",
+    "Returns a merged inventory of available iOS simulators (udid, name, state, runtime) plus any adb-detected Android devices. If adb is absent, the android section reports availability: false instead of failing. NOTE: Android entries are detection-only — podium's automation tools (tap/inspect/etc.) currently target iOS simulators.",
     {},
     async () => {
       const [iosResult, adbPresent] = await Promise.all([
@@ -301,8 +301,10 @@ export function registerDeviceTools(server: McpServer): void {
         .describe("Destination file path (must end .mp4). Defaults to a tmp file."),
     },
     async ({ udid, saveTo }) => {
+      // Timestamp the default path so a start→stop→start cycle never silently
+      // overwrites the previous recording (a stale path would read the new file).
       const outPath =
-        saveTo ?? path.join(os.tmpdir(), `podium-recording-${udid}.mp4`);
+        saveTo ?? path.join(os.tmpdir(), `podium-recording-${udid}-${Date.now()}.mp4`);
       const result = await startRecording(udid, outPath);
       if (!result.ok) {
         return errorResult(`record_start failed: ${result.error ?? "unknown error"}`);

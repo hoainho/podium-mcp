@@ -4,14 +4,16 @@
 
 **One baton. Every instrument.**
 
-A single stdio endpoint with **33 tools** for iOS-simulator device control, native UI automation, end-to-end flows, React Native debugging, and WebView DOM inspection — one connection instead of several.
+A single MCP stdio endpoint with **43 tools** for iOS-simulator control, native UI automation, end-to-end flows, **trustworthy assertions**, React Native debugging, and **WebView DOM + network inspection** — one connection instead of half a dozen servers.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7C3AED)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-61%20passing-brightgreen.svg)](#development)
+[![Tools](https://img.shields.io/badge/tools-43-7C3AED.svg)](#the-43-tools)
+[![Tests](https://img.shields.io/badge/tests-182%20passing-brightgreen.svg)](#development--testing)
 [![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
+[![mcp.so](https://img.shields.io/badge/mcp.so-listed-7C3AED)](https://mcp.so/server/io.github.hoainho/podium-mcp)
 
 <br/>
 
@@ -23,59 +25,83 @@ A single stdio endpoint with **33 tools** for iOS-simulator device control, nati
 
 ---
 
-A podium is where a maestro stands — one place to conduct the whole orchestra. This MCP server unifies three capability sets into a single stdio endpoint: **device management** (via `simctl`, with graceful `adb` support), **UI inspection, interaction, and declarative end-to-end flows** (driven through the Maestro flow engine), and **React Native debugging** (Metro console logs over CDP + crash reports). Rather than wiring several separate MCP servers into every client config, `podium-mcp` exposes everything behind one connection, with a shared exec layer, consistent error handling, and a single health-check tool to confirm what toolchain is available on the host machine.
+A podium is where a maestro stands — one place to conduct the whole orchestra. This MCP server unifies six capability sets behind a single stdio endpoint:
+
+- **Device & app management** — `simctl`, with graceful `adb` detection.
+- **Native UI inspection & gestures** — route through `idb`/`mobilecli` with a Maestro fallback (no per-gesture JVM spin-up).
+- **End-to-end flows & batch automation** — declarative Maestro flows, ordered action batches, and an engineer→QA flow exporter.
+- **Trustworthy assertions** — an *oracle ladder* (WebView-DOM › native a11y › Maestro) that returns falsifiable, evidenced verdicts and **fails closed**.
+- **WebView DOM + network** — resolve `WKWebView` DOM to tap coordinates, evaluate JS, drive navigation, and capture in-page HTTP traffic as JSON/HAR.
+- **React Native debugging** — Metro console logs, network requests, and in-app state over CDP, plus host/simulator crash reports.
+
+Rather than wiring several MCP servers into every client config, `podium-mcp` exposes everything behind **one connection**, with a shared `execFile` layer (no shell), consistent structured errors, automatic retry around Maestro's iOS-driver flakiness, and a single health-check tool to confirm what's available on the host.
+
+## What's new in v0.2.0
+
+- 🎯 **Oracle ladder + trustworthy verdicts** — `assert_visible` / `assert_text` / `assert_not_visible` / `wait_for_element` and `validate_flow` verify state through WebView-DOM › native a11y › Maestro, returning **evidenced** results that fail closed instead of guessing "looks ok".
+- 🔁 **Batch & export** — `run_steps` runs an ordered action batch in one call via the native backend; `export_flow` turns that batch into a reusable Maestro flow (the engineer→QA bridge).
+- 🌐 **WebView network capture** — `webview_network` records in-WebView `fetch`/`XHR` traffic and exports redacted **JSON or HAR 1.2** (the network path `metro_network` can't see for WebView-hosted apps).
+- 🐛 **Deeper RN introspection** — `metro_network` (CDP Network domain) and `metro_state` (read the in-app Redux store) join `metro_logs`.
+- ⚡ **Native-first gesture backend** — `idb`/`mobilecli` cut `tap_on` ~14.7 s → ~0.6 s and `inspect_screen` ~8.9 s → ~0.9 s, with a Maestro fallback that preserves app state.
+- 🛡️ **Reliability hardening** — explicit per-command timeouts with a `timedOut` flag, timestamped recordings + a duration watchdog, native-backend re-probe TTL, exact bundle-id matching, and transparent iOS-simulator scope.
+- 📦 **Registry-ready** — `server.json` manifest + OIDC publish to the official MCP Registry, test-gated before every publish.
 
 ## Table of contents
 
 - [Why](#why)
 - [Requirements](#requirements)
-- [Installation](#installation)
+- [Install](#install)
 - [Usage](#usage)
-- [Prompt playbook](#prompt-playbook)
-- [Capability coverage](#capability-coverage-the-5-requirements)
-- [Tool reference](#tool-reference-33-tools)
+- [Quick start](#quick-start-order-of-use)
+- [The 43 tools](#the-43-tools)
+- [The oracle ladder — trustworthy assertions](#the-oracle-ladder--trustworthy-assertions)
+- [Native-first gesture backend](#native-first-gesture-backend)
+- [WebView & RN network introspection](#webview--rn-network-introspection)
 - [Documented limits](#documented-limits-by-design-not-bugs)
 - [Architecture](#architecture)
-- [Development](#development)
-- [Full tool catalog](#full-tool-catalog)
-- [Verified end-to-end](#verified-end-to-end)
+- [Development & testing](#development--testing)
+- [Releasing](#releasing)
+- [Prompt playbook & references](#prompt-playbook--references)
 - [Design ideas](#design-ideas)
-- [Contributing](#contributing)
-- [Security](#security)
-- [License](#license)
+- [Contributing](#contributing) · [Security](#security) · [License](#license)
 
 ## Why
 
-Driving a React Native app end-to-end usually means juggling three MCP servers —
-one for device/app control, one for UI flows, one for Metro/debugger logs — each
-with its own config entry, its own quirks, and its own failure modes. podium-mcp
-collapses that into **one** server with:
+Driving a React Native app end-to-end usually means juggling several MCP servers —
+one for device/app control, one for UI flows, one for Metro/debugger logs, another
+for WebView inspection — each with its own config entry, quirks, and failure modes.
+podium-mcp collapses that into **one** server with:
 
 - a single `execFile`-based command runner (no shell — arguments are passed verbatim),
 - consistent structured errors (a tool never crashes the server),
 - automatic retry around Maestro's known iOS-driver flakiness,
-- graceful degradation when a toolchain (e.g. `adb`) is absent.
+- graceful degradation when a toolchain (e.g. `adb`) is absent,
+- **evidenced verdicts** so an agent knows when a flow *actually* worked.
 
 ## Requirements
 
 - **macOS** with Xcode command-line tools (`xcrun`, `simctl`)
-- **Node.js ≥ 22** (uses native `fetch` and `WebSocket`)
+- **Node.js ≥ 22** (uses native `fetch` and `WebSocket`; `.npmrc` sets `engine-strict=true`)
 - **`mobilecli`** — bundled automatically as an npm dependency; the default native gesture + WebView backend (no separate install)
 - *(optional)* **[`idb`](https://fbidb.io)** (`idb` + `idb_companion`) — preferred native gesture backend when both are present; auto-detected
 - *(optional)* **[Maestro](https://maestro.mobile.dev)** on `PATH` (or at `~/.maestro/bin`) — the `run_flow` engine and the gesture fallback path
-- *(optional)* Android SDK + `adb` — adb paths degrade gracefully when absent
-- *(optional)* a running Metro bundler for the `metro_*` debugging tools
+- *(optional)* a running **Metro** bundler for the `metro_*` debugging tools
+- *(optional)* Android SDK + `adb` — adb paths are **detection-only** and degrade gracefully when absent
 
-## Claude Code plugin
+> **Platform scope:** podium's automation targets the **iOS Simulator**. Android devices are *detected* (`device_list`, `podium_health`) but not yet automatable — every adb-backed path returns an informative result instead of failing.
 
-Install podium-mcp as a Claude Code plugin — no manual config needed. One-time marketplace setup, then install:
+## Install
+
+### Claude Code plugin (recommended)
+
+No manual config — one-time marketplace setup, then install:
 
 ```
 /plugin marketplace add github:hoainho/podium-mcp
 /plugin install podium-mcp@podium
 ```
 
-Once installed, four skills are available directly in Claude Code:
+The plugin auto-starts the MCP server (all 43 tools) and ships four skills:
 
 | Skill | Invoke | What it does |
 |---|---|---|
@@ -84,12 +110,17 @@ Once installed, four skills are available directly in Claude Code:
 | Bug repro | `/podium-mcp:bug-repro <UDID> <BUNDLE_ID> <description>` | Video + logs + crash evidence capture |
 | RN debug | `/podium-mcp:rn-debug [UDID] [logs\|apps\|crash\|all]` | Metro logs, connected apps, crash reports |
 
-The plugin auto-starts the MCP server (all 33 tools) when enabled. No `.mcp.json` edits required.
+### npx (zero install)
 
-> **To submit this plugin to the Claude community marketplace** (for discovery without the `marketplace add` step):
-> [claude.ai/settings/plugins/submit](https://claude.ai/settings/plugins/submit)
+```json
+{
+  "mcpServers": {
+    "podium": { "command": "npx", "args": ["-y", "podium-mcp"] }
+  }
+}
+```
 
-## Manual installation
+### Manual (from source)
 
 ```bash
 git clone git@github.com:hoainho/podium-mcp.git
@@ -114,7 +145,7 @@ Register the built server with any MCP client. **Claude Code** (`.mcp.json`):
 }
 ```
 
-Quick manual smoke test over raw stdio (lists the registered tools):
+Quick manual smoke test over raw stdio (lists the 43 registered tools):
 
 ```bash
 printf '%s\n' \
@@ -123,89 +154,155 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | node dist/index.js
 ```
 
-Then call `podium_health` first to confirm which toolchain is available on the host.
+Always call **`podium_health`** first to confirm which toolchain is available on the host.
 
-## Prompt playbook
+## Quick start (order of use)
 
-Copy-paste prompts for common React Native testing & debugging tasks — e2e flows,
-test cases, feature verification, bug fixing, and device control — live in
-[`prompts/`](prompts/). Each prompt names the podium tools it drives and was
-validated against a real simulator. Start with
-[`prompts/README.md`](prompts/README.md).
+1. **`podium_health`** — confirm `xcrun` / `maestro` / native backend availability.
+2. **`device_list`** — pick a booted simulator `udid`.
+3. **Read state** — `app_list`, `app_state`, `screen_size`, `orientation_get`.
+4. **Drive the device** — `app_launch`, then `tap_on` / `input_text` / `swipe` / `press_key`, plus `set_location` and `orientation_set`. Batch several with `run_steps`.
+5. **Author & verify** — `inspect_screen` to discover elements, `run_flow` for declarative checks, then `assert_visible` / `validate_flow` for an **evidenced** verdict.
+6. **Inspect WebViews** — `webview_inspect` → tap coordinates, `webview_eval`, `webview_navigate`, `webview_network`.
+7. **Capture & debug** — `screenshot` / `record_start`→`record_stop`; `metro_logs` / `metro_network` / `metro_state`; `crash_list` / `crash_get`.
 
-## Capability coverage (the 5 requirements)
+## The 43 tools
 
-| # | Requirement | podium tools | Verified on a real RN app |
+> Every tool returns structured JSON and never throws — failures come back as MCP tool errors. See [`docs/tool-catalog.md`](docs/tool-catalog.md) for the authoritative per-parameter reference.
+
+### Health & toolchain (1)
+
+| Tool | Key params | Backing engine | Behavior |
 |---|---|---|---|
-| 1 | Read all info from device | `device_list`, `screen_size`, `orientation_get`, `app_list`, `app_state`, `podium_health` | ✅ screen 1206×2622, `app_list` resolves bundle id + name |
-| 2 | Control device | `app_launch/terminate/install/uninstall`, `tap_on`, `swipe`, `input_text`, `press_key`, `set_location`, `orientation_set`, `open_url` | ✅ tap, key, location, orientation all pass |
-| 3 | Screenshot / capture | `screenshot`, `record_start`/`record_stop` (video) | ✅ PNG + QuickTime `.mp4` |
-| 4 | Make e2e | `run_flow`, `inspect_screen`, `cheat_sheet` + gestures | ✅ flow pass with per-step results |
-| 5 | Everything behind one connection | all 33 tools below — device, automation, capture, debugging, and WebView inspection in a single endpoint | ✅ see [tool catalog](docs/tool-catalog.md) |
+| `podium_health` | — | `which` probes | Never fails; reports `toolchain { xcrun, maestro, adb }`, native backend, and `platform: ios-simulator` |
 
-## Tool reference (33 tools)
+### Device & simulator (6)
 
-| Tool | Key params | Backing engine | Failure behavior |
+| Tool | Key params | Backing engine | Behavior |
 |---|---|---|---|
-| `podium_health` | — | `which` probes | Never fails; booleans for xcrun / maestro / adb |
-| `device_list` | — | `simctl list --json` + `adb devices` | adb absent → `android: { available: false }` (graceful) |
-| `device_boot` | udid | `simctl boot` | Structured tool error |
-| `app_install` | udid, path | `simctl install` | Structured tool error |
-| `app_launch` | udid, bundleId | `simctl launch` | Structured tool error |
-| `app_terminate` | udid, bundleId | `simctl terminate` | Structured tool error |
-| `screenshot` | udid, saveTo? | `simctl io screenshot` | Returns path + byteSize (no base64 bloat) |
-| `open_url` | udid, url | `simctl openurl` | Structured tool error |
-| `set_location` | udid, latitude, longitude | `simctl location set` | Codifies the QA geo-spinner fix |
-| `app_state` | udid, bundleId | `simctl listapps` + `launchctl list` | `{ installed, running }` |
-| `app_list` | udid | `simctl listapps` + `plutil` JSON | `{ count, apps: [{bundleId, name, type}] }` |
-| `app_uninstall` | udid, bundleId | `simctl uninstall` | Structured tool error |
+| `device_list` | — | `simctl list -j` + `adb devices` | Merged iOS inventory; adb absent → `android: { available: false }` (detection-only) |
+| `device_boot` | udid | `simctl boot` | Idempotent — already-booted → `alreadyBooted: true`; waits up to 30 s |
 | `screen_size` | udid | `simctl io screenshot` + `sips` | `{ widthPx, heightPx }` (real pixels) |
-| `orientation_get` | udid | native query (`mobilecli`/`idb`) → screenshot fallback | `{ orientation, basis }` (exact when native; heuristic otherwise) |
-| `orientation_set` | udid, bundleId, value | native (`mobilecli`) → Maestro fallback | PORTRAIT / LANDSCAPE_LEFT / LANDSCAPE_RIGHT / UPSIDE_DOWN |
-| `record_start` | udid, saveTo? (.mp4) | detached `simctl io recordVideo` | `{ ok, path, pid }`; one recording per udid |
-| `record_stop` | udid | SIGINT the recorder + flush | `{ ok, path, sizeBytes }` |
-| `inspect_screen` | udid, compact? | native flat AX list (`idb`/`mobilecli`) → `maestro hierarchy` | `compact:true` (default) returns only meaningful nodes |
-| `tap_on` | udid, bundleId, text\|id\|x+y, double?, long? | native tap (`idb`/`mobilecli`) → Maestro fallback | text/id resolved via the element list; reports `backend` |
-| `input_text` | udid, bundleId, text, submit? | native (`idb`/`mobilecli`) → Maestro fallback | reports `backend` |
-| `swipe` | udid, bundleId, direction, start/end? | native (`idb`/`mobilecli`) → Maestro fallback | %/pixel overrides resolved vs logical screen size |
-| `press_key` | udid, bundleId, key | native (`idb`/`mobilecli`) → Maestro fallback | back/power/tab are Android-only |
-| `tap_with_fallback` | udid, x, y, bundleId?, maxRetries?, offsetStep? | native tap + before/after screenshot diff | Retries at `y - offsetStep` until the screen changes; for WebGL/Canvas overlays |
-| `notification_bar_clear` | udid, bundleId? | native tap at (50,850) + screenshot diff | Dismisses the RN debug notification bar |
-| `run_flow` | udid + exactly one of yaml/files/dir(+tags), env? | `maestro test` | Exactly-one-of validated before exec; per-step results |
-| `cheat_sheet` | — | bundled `assets/maestro-cheat-sheet.yaml` | Fully offline |
-| `webview_inspect` | udid, selector?, webviewId?, max? | `mobilecli` (CDP) | Resolves a CSS selector to DOM elements with absolute `tapX`/`tapY` for `tap_on`; first visible WebView when `webviewId` omitted |
-| `webview_eval` | udid, expression, webviewId? | `mobilecli` (CDP) | Evaluates JS in the WebView page context (read `location.href`, store state, balances) |
-| `webview_navigate` | udid, action (`goto`\|`back`\|`forward`\|`reload`), url?, webviewId? | `mobilecli` (CDP) | Drives WebView navigation |
-| `metro_apps` | port? (8081) | GET `http://localhost:<port>/json` | Metro down → structured `metro not running` |
-| `metro_logs` | webSocketDebuggerUrl? / port?, durationMs?, maxLogs? | native WebSocket + CDP `Runtime.enable` | Auto-discovers first app when URL omitted |
-| `crash_list` | processName?, sinceHours?, udid? | `~/Library/Logs/DiagnosticReports` + sim container | Empty list when dir unreadable |
+| `orientation_get` | udid | native query → screenshot heuristic | `{ orientation, basis }` (exact when native) |
+| `set_location` | udid, latitude, longitude | `simctl location set` | Codifies the QA geo-spinner fix |
+| `open_url` | udid, url | `simctl openurl` | Deep links + `https://` |
+
+### Apps (6)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `app_install` | udid, path (.app/.zip) | `simctl install` | Structured tool error |
+| `app_launch` | udid, bundleId | `simctl launch` | Explicit 30 s timeout (cold RN launches no longer mis-report failure) |
+| `app_terminate` | udid, bundleId | `simctl terminate` | Structured tool error |
+| `app_uninstall` | udid, bundleId | `simctl uninstall` | Structured tool error |
+| `app_list` | udid | `simctl listapps` + `plutil` | `{ count, apps: [{ bundleId, name, type }] }` |
+| `app_state` | udid, bundleId | `simctl listapps` + `launchctl` | `{ installed, running }` — **exact** bundle-id match |
+
+### Capture (3)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `screenshot` | udid, saveTo? | `simctl io screenshot` | Returns `path` + `byteSize` (no base64 bloat) |
+| `record_start` | udid, saveTo? (.mp4) | detached `simctl io recordVideo` | `{ ok, path, pid }`; timestamped path + duration watchdog (`PODIUM_MAX_RECORDING_MS`); one per udid |
+| `record_stop` | udid | SIGINT recorder + flush | `{ ok, path, sizeBytes }` |
+
+### UI inspection & gestures (8)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `inspect_screen` | udid, compact? | native flat AX list → `maestro hierarchy` | `compact:true` (default) returns only meaningful nodes |
+| `tap_on` | udid, bundleId, text\|id\|x+y, double?, long? | native tap → Maestro fallback | text/id resolved via the element list; reports `backend` |
+| `input_text` | udid, bundleId, text, submit? | native → Maestro fallback | reports `backend` |
+| `swipe` | udid, bundleId, direction, start/end? | native → Maestro fallback | %/pixel overrides resolved vs logical screen size |
+| `press_key` | udid, bundleId, key | native → Maestro fallback | back/power/tab are Android-only |
+| `orientation_set` | udid, bundleId, value | native → Maestro fallback | PORTRAIT / LANDSCAPE_LEFT / LANDSCAPE_RIGHT / UPSIDE_DOWN |
+| `tap_with_fallback` | udid, x, y, maxRetries?, offsetStep? | native tap + before/after oracle | For WebGL/Canvas overlays; **no blind walk** (`offsetStep` opt-in) |
+| `notification_bar_clear` | udid, bundleId? | native tap + oracle | Dismisses the RN debug notification bar |
+
+### Flows & batch automation (4)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `run_steps` | udid, bundleId, steps[] | native backend (idb/mobilecli) | Ordered action batch in **one call**; per-step results |
+| `run_flow` | udid + exactly one of yaml/files/dir(+tags), env? | `maestro test` | Exactly-one-of validated before exec; per-step pass/fail |
+| `export_flow` | steps[], output path | flow generator | Exports a `run_steps` batch to a reusable Maestro flow (engineer→QA bridge) |
+| `cheat_sheet` | — | bundled `assets/maestro-cheat-sheet.yaml` | Fully offline Maestro syntax reference |
+
+### Assertions & verdicts — the oracle ladder (5)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `assert_visible` | udid, text\|id, … | oracle ladder (WebView-DOM › a11y › Maestro) | Evidenced pass/fail; reports which oracle proved it |
+| `assert_text` | udid, text | oracle ladder | by-text shorthand for `assert_visible` |
+| `assert_not_visible` | udid, text\|id | oracle ladder | **Fails closed** — if absence can't be verified, it fails |
+| `wait_for_element` | udid, text\|id, timeoutMs? | oracle ladder (polling) | Polls until visible or times out |
+| `validate_flow` | udid, flow + assertions | oracle ladder + flow run | Trustworthy, falsifiable verdict on whether a just-built flow works |
+
+### WebView DOM & network (4)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `webview_inspect` | udid, selector?, webviewId?, max? | `mobilecli` (CDP) | Resolves a CSS selector to DOM elements with absolute `tapX`/`tapY` |
+| `webview_eval` | udid, expression, webviewId? | `mobilecli` (CDP) | Runs JS in the page context; gated by `PODIUM_DISABLE_WEBVIEW_EVAL=1` |
+| `webview_navigate` | udid, action (goto/back/forward/reload), url? | `mobilecli` (CDP) | Drives WebView navigation |
+| `webview_network` | udid, durationMs?, format (json/har)?, saveTo?, redact?, includeResources? | CDP + in-page fetch/XHR shim + Resource Timing | Captures in-WebView HTTP traffic; exports **redacted JSON or HAR 1.2** |
+
+### React Native debugging — Metro CDP (4)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `metro_apps` | port? (8081) | GET `http://localhost:<port>/json` | Differentiated errors (timeout vs not-running vs other) |
+| `metro_logs` | wsUrl?/port?, durationMs?, maxLogs? | WebSocket + CDP `Runtime.enable` | Auto-discovers first app when URL omitted |
+| `metro_network` | wsUrl?/port?, durationMs?, maxEntries? | CDP `Network.enable` | Requests (url/method/status/mimeType/ts) |
+| `metro_state` | expression?/wsUrl?/port?, timeoutMs? | CDP `Runtime.evaluate` | Reads in-app state (default: globally-exposed Redux store) |
+
+### Crash diagnostics (2)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `crash_list` | processName?, sinceHours?, udid? | host + sim `DiagnosticReports` | Newest-first; tagged `source: host \| simulator` |
 | `crash_get` | id, udid? | same | Path-traversal-safe (basename only); truncates honestly |
 
-> **WebView tools** (`webview_inspect`/`eval`/`navigate`) use the bundled `mobilecli` over CDP — not the idb or Maestro paths — and require the app's `WKWebView.isInspectable = true` (default in debug/staging builds; usually disabled in production App Store builds).
+## The oracle ladder — trustworthy assertions
 
-### Native-first gesture backend
+"It works" is operationalized as a **falsifiable, evidenced verdict** — never "looks ok". Assertions and `validate_flow` resolve visibility through a three-rung ladder, using the strongest available signal:
 
-Imperative gestures (`tap_on`, `input_text`, `swipe`, `press_key`, `orientation_set`) and `inspect_screen` route through the fastest available backend, probed once and cached:
+1. **WebView DOM** — when an inspectable `WKWebView` is present, query the real DOM.
+2. **Native accessibility** — the native AX element set (via `idb`/`mobilecli`).
+3. **Maestro** — `assertVisible`/`assertNotVisible` as the fallback.
 
-1. **`idb`** — used when both `idb` and `idb_companion` are installed (native, fastest).
-2. **`mobilecli`** — the bundled npm dependency (prebuilt Go binary). Default backend; no install needed.
-3. **Maestro fallback** — when no native backend resolves, or for actions a native backend can't express (double/long-press, `UPSIDE_DOWN`). The gesture generates a minimal flow with `launchApp: { stopApp: false }`, foregrounding the app **without restarting** so state is preserved.
+`assert_not_visible` **fails closed**: if absence can't be positively verified (e.g. a WebView is unreadable), it reports failure rather than a false pass. Every verdict names the oracle that produced it, so an agent can weight its confidence.
 
-Each result reports the `backend` it used. Set `PODIUM_DISABLE_NATIVE=1` to force the Maestro path. Eliminating the per-gesture JVM spin-up cut `tap_on` from ~14.7 s to ~0.6 s and `inspect_screen` from ~8.9 s to ~0.9 s on an iPhone 16 Pro simulator. Run `npm run benchmark` for a full 33-tool pass/fail sweep.
+## Native-first gesture backend
 
-### Maestro fallback — idb flakiness retry
+Imperative gestures (`tap_on`, `input_text`, `swipe`, `press_key`, `orientation_set`, `run_steps`) and `inspect_screen` route through the fastest available backend, probed once and cached (with a short **negative-cache TTL** so a backend that starts after launch is picked up):
 
-When the Maestro fallback path runs, its iOS driver intermittently fails with `Failed to connect to 127.0.0.1:<port>` / `java.net.ConnectException`. Flow executions automatically retry up to **2 times with 2s / 5s backoff** and report the `retries` count. If it persists, the structured failure includes the raw output — the usual remedies are rebooting the simulator (`device_boot` after shutdown) or restarting the Maestro daemon.
+1. **`idb`** — when both `idb` and `idb_companion` are installed (native, fastest).
+2. **`mobilecli`** — the bundled npm dependency (prebuilt Go binary). Default; no install.
+3. **Maestro fallback** — when no native backend resolves, or for actions it can't express (double/long-press, `UPSIDE_DOWN`). The gesture generates a minimal flow with `launchApp: { stopApp: false }`, foregrounding the app **without restarting** so state is preserved.
+
+Each result reports the `backend` it used. Set `PODIUM_DISABLE_NATIVE=1` to force Maestro. Eliminating the per-gesture JVM spin-up cut `tap_on` ~14.7 s → ~0.6 s and `inspect_screen` ~8.9 s → ~0.9 s on an iPhone 16 Pro simulator. Run `npm run benchmark` for a full pass/fail sweep.
+
+**Maestro flakiness retry:** when the fallback runs, its iOS driver intermittently fails with `Failed to connect to 127.0.0.1:<port>`. Flows retry up to **2× with 2 s / 5 s backoff** and report the `retries` count; a persistent failure returns the raw output with remediation hints.
+
+## WebView & RN network introspection
+
+Two distinct network layers, two tools:
+
+- **`metro_network`** captures requests on the **RN/Hermes** target via the CDP Network domain — the right tool for a native RN app's own `fetch`.
+- **`webview_network`** captures traffic **inside a `WKWebView`**: it injects a `fetch`/`XHR` recorder (rich — method/status/headers/body for calls *after* capture starts) **and** reads the browser's Performance Resource Timing buffer (`includeResources`, default on) — every request since navigation, including pre-capture ones (URL/timing/size). The merge yields a near-complete request list, exported as redacted **JSON or HAR 1.2**.
+
+For an RN shell that hosts its UI in a WebView, the app's API calls run in the web layer — so `metro_network` sees nothing and `webview_network` is the tool to reach for. WebView tools require `WKWebView.isInspectable = true` (default in debug/staging builds; off in production); when none is found they return an **actionable** error.
 
 ## Documented limits (by design, not bugs)
 
 - **WebGL/Canvas content is un-automatable by selector** — no DOM/hierarchy; use `tap_with_fallback` with screenshot-derived coordinates.
-- **`inspect_screen` sees only the native layer for WebView content** — use `webview_inspect` to resolve `WKWebView` DOM elements to tap coordinates (requires `isInspectable = true`).
-- **WebView tools are dev/QA only** — production App Store builds typically set `WKWebView.isInspectable = false`.
-- **No Android SDK assumption** — every adb-backed path degrades to a structured "adb not found" result instead of failing.
-- **WebView content-process memory is unreadable** from the app sandbox (iOS/Android platform limit) — use indirect signals (memory warnings, process terminations).
+- **WebView tools are dev/QA only** — production App Store builds typically set `isInspectable = false`; tools return an actionable error and fall back to coordinate taps.
+- **WebView content-process memory is unreadable** from the app sandbox (platform limit) — use indirect signals (memory warnings, process terminations).
 - **Maestro `text:` matcher is full-string regex (IGNORE_CASE)** — partial strings don't match; copy hierarchy `text` verbatim or anchor with `.*`.
-- **`record_start`/`record_stop` keep recorder state in-process** (one Map per udid, server is long-lived). Clients must serialize `start` → … → `stop` on the same connection; firing both in one un-awaited batch races. One active recording per udid.
+- **Android is detection-only** — every adb path degrades to a structured "adb not found" result.
+- **`orientation_get` is a screenshot-aspect heuristic** when no native backend is present — iOS simulators expose no direct orientation query.
+- **`record_start`/`record_stop` keep state in-process** — serialize `start` → … → `stop` on one connection; one active recording per udid (a watchdog finalizes one that's never stopped).
 
 ## Architecture
 
@@ -213,74 +310,78 @@ When the Maestro fallback path runs, its iOS driver intermittently fails with `F
 src/
   index.ts          # MCP server entry — registers every tool group, warms caches
   lib/
-    exec.ts         # execFile-based command runner (NO shell) + commandExists
+    exec.ts         # execFile-based runner (NO shell) + timeout/timedOut flag
     result.ts       # shared ok/error MCP content helpers
     simctl.ts       # xcrun simctl wrappers + device-list TTL cache
-    native.ts       # gesture/inspect backend abstraction: idb → mobilecli → null
+    native.ts       # gesture/inspect backend: idb → mobilecli → null (re-probe TTL)
     idb.ts          # idb gesture/inspect adapter
-    gesture.ts      # nativeTap hybrid (backend → Maestro fallback)
+    gesture.ts      # unified native→Maestro executors (shared by screen + steps)
+    oracle.ts       # the oracle ladder: WebView-DOM › a11y › Maestro
     maestro.ts      # Maestro engine: flow runner, idb retry, hierarchy
-    webview.ts      # mobilecli CDP — WebView list/inspect/eval/navigate
-    metro.ts        # Metro CDP — app discovery + console log capture
+    export-maestro.ts # run_steps → reusable Maestro flow
+    har.ts          # HAR 1.2 export for webview_network
+    webview.ts      # mobilecli CDP — WebView list/inspect/eval/navigate/network
+    metro.ts        # Metro CDP — app discovery, logs, network, state
     crash.ts        # DiagnosticReports crash listing/reading
-    recording.ts    # detached screen recording lifecycle
-  tools/            # one file per group (health, device, screen, flow, debug, webview)
-assets/             # bundled offline Maestro cheat sheet
-scripts/            # benchmark.ts (33-tool e2e), compare-mcps.ts
-docs/               # tool catalog + e2e transcript
+    recording.ts    # detached screen recording lifecycle + watchdog
+  tools/            # one file per group:
+                    #   health, device, screen, steps, flow,
+                    #   assert, validate, webview, debug
+assets/             # bundled offline Maestro cheat sheet + demo.gif
+scripts/            # benchmark.ts, compare-mcps.ts
+e2e/                # real-simulator smoke suites (smoke / full-smoke / webview-network-live)
+docs/               # tool catalog, e2e transcript, roadmap
 ```
 
-## Development
+## Development & testing
 
 ```bash
 npm run build       # tsc
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run (61 tests; exec/network layer mocked — no sim needed)
+npm test            # vitest run — 182 unit/integration tests (exec/network mocked, no sim needed)
+npm run benchmark   # spawn a fresh server over stdio and sweep the tool suite
+node e2e/smoke.e2e.mjs        # real E2E against a booted simulator (macOS + Xcode)
+node e2e/full-smoke.e2e.mjs   # drives all 43 tool handlers (happy + structured-error paths)
 ```
 
-Standards: TypeScript strict, **no `as any` / `@ts-ignore`**, **no shell execution**
-(all commands via `lib/exec.ts`), tools return structured errors instead of throwing.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and the "add a new tool" checklist.
+**182 tests across 16 files, all passing** — including the oracle ladder (`oracle`, `assert`, `validate`), recording watchdog + timestamps, gesture-parity (`screen` ≡ `steps`), HAR export, WebView, and Metro paths.
 
-## Full tool catalog
+Standards: TypeScript strict, **no `as any` / `@ts-ignore`**, **no shell execution** (all commands via `lib/exec.ts`), tools return structured errors instead of throwing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the "add a new tool" checklist.
 
-See [`docs/tool-catalog.md`](docs/tool-catalog.md) for the authoritative tool-by-tool reference — every tool with its parameters, backing engine, and fallback behavior, plus the items deferred to a future version (cloud execution, live viewer).
+**E2E on CI:** the [`E2E (simulator)`](.github/workflows/e2e-sim.yml) workflow boots a real iOS simulator on a macOS runner and runs the smoke suites nightly + on demand (not a PR gate — simulator runs are slow). `full-smoke.e2e.mjs` asserts the happy path where a target exists and the **real structured-error path** where a dependency is absent (a debug `isInspectable` app for WebView; a connected RN app for `metro_*`).
 
-## Verified end-to-end
+## Releasing
 
-See [`docs/e2e-demo.md`](docs/e2e-demo.md) for a real transcript against a booted iPhone 16 Pro simulator running a production React Native app.
+`server.json` is the official MCP Registry manifest. Pushing a `v*` tag runs
+[`Publish to npm`](.github/workflows/publish-npm.yml) then
+[`Publish to MCP Registry`](.github/workflows/publish-mcp-registry.yml) (GitHub OIDC for the
+`io.github.hoainho/*` namespace — no long-lived token). Both workflows run `typecheck → build → test`
+as a gate first; the registry publish only succeeds once the matching npm version is live, and
+versions are immutable.
 
-> **Platform note:** macOS + iOS Simulator is the primary target. Android degrades gracefully — tools check for `adb` at runtime and return informative errors when the Android SDK is absent rather than failing hard.
+## Prompt playbook & references
+
+- **[`prompts/`](prompts/)** — copy-paste prompts for e2e flows, test cases, feature verification, bug fixing, and device control. Each names the podium tools it drives and was validated on a real simulator. Start with [`prompts/README.md`](prompts/README.md).
+- **[`docs/tool-catalog.md`](docs/tool-catalog.md)** — authoritative tool-by-tool reference.
+- **[`docs/e2e-demo.md`](docs/e2e-demo.md)** — a real transcript against a booted iPhone 16 Pro simulator running a production RN app.
 
 ## Design ideas
 
-podium-mcp is built around a few deliberate principles:
-
-- **One podium, one connection.** A single server fronts every mobile capability — device, UI, flows, capture, debugging, and WebView inspection — so an agent configures one endpoint and discovers all 33 tools at once, instead of stitching together several servers.
-- **Safe by construction.** Every external command runs through an `execFile` layer with an explicit argument array — never a shell string — so tool inputs (udids, paths, selectors, flow YAML) can't be interpreted as commands.
+- **One podium, one connection.** A single server fronts every mobile capability so an agent configures one endpoint and discovers all 43 tools at once.
+- **Safe by construction.** Every external command runs through an `execFile` layer with an explicit argument array — never a shell string.
 - **Never crash the conductor.** Tools return structured results and errors instead of throwing; one bad call can't take the server down.
 - **Degrade, don't fail.** A missing toolchain (e.g. Android's `adb`) yields an informative result rather than a hard error.
-- **Resilient automation.** Flaky simulator drivers are retried with backoff, and every result reports exactly what happened (including the retry count).
-
-### How to use it, in order
-
-1. **`podium_health`** — confirm `xcrun` and `maestro` are available on the host.
-2. **`device_list`** — pick a booted simulator `udid`.
-3. **Read state** — `app_list`, `app_state`, `screen_size`, `orientation_get`.
-4. **Drive the device** — `app_launch`, then `tap_on` / `input_text` / `swipe` / `press_key`, plus `set_location` and `orientation_set`.
-5. **Author end-to-end checks** — `inspect_screen` to discover element text/ids, then `run_flow` (inline YAML or a `.maestro` file).
-6. **Capture & debug** — `screenshot` or `record_start` → `record_stop` for video; `metro_logs` for live RN console output; `crash_list` / `crash_get` for diagnostics.
+- **Prove it, don't guess.** Assertions return evidenced verdicts via the oracle ladder and fail closed when they can't verify.
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and our
-[Code of Conduct](CODE_OF_CONDUCT.md). Use the issue templates for bugs and
-feature requests.
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Use the issue templates for bugs and feature requests.
 
 ## Security
 
-Please report vulnerabilities privately per [SECURITY.md](SECURITY.md) — do not
-open a public issue.
+Please report vulnerabilities privately per [SECURITY.md](SECURITY.md) — do not open a public issue.
+SECURITY.md also documents the `webview_eval` / `run_flow` trust boundary and the PII-in-transcript caveat.
 
 ## License
 

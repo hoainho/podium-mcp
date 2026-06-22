@@ -2,15 +2,8 @@ import { z } from "zod";
 import { getHierarchy, runMaestroFlow } from "../lib/maestro.js";
 import { run } from "../lib/exec.js";
 import { getBackend, findElements, elementCenter } from "../lib/native.js";
-import { nativeTap } from "../lib/gesture.js";
-/** Parse "35%" against a span, or a plain number string verbatim. Null on junk. */
-function resolveCoord(raw, span) {
-    const pct = /^(\d+(?:\.\d+)?)%$/.exec(raw.trim());
-    if (pct)
-        return (parseFloat(pct[1]) / 100) * span;
-    const n = Number(raw.trim());
-    return Number.isFinite(n) ? n : null;
-}
+import { detectSurface, targetingHint } from "../lib/oracle.js";
+import { nativeTap, nativeKey, nativeInputText, nativeSwipe } from "../lib/gesture.js";
 import { stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import os from "node:os";
@@ -61,13 +54,20 @@ const KEY_VALUES = [
     "power",
     "tab",
 ];
-/** Capitalize first letter for the YAML ("enter" → "Enter"); Maestro matches pressKey case-insensitively. */
-function fmtKey(k) {
-    return k.charAt(0).toUpperCase() + k.slice(1);
+/**
+ * Stable signature of the native accessibility element set — used as the primary
+ * tap-change oracle. Unlike a screenshot byte-size delta, this is invariant under
+ * animation/video/cursor blink, so it doesn't false-positive on busy UIs.
+ * Returns null when the element tree is unavailable (caller then can't verify).
+ */
+function elementSignature(els) {
+    if (!els)
+        return null;
+    return JSON.stringify(els.map((e) => [e.label ?? "", e.value ?? "", e.identifier ?? ""]));
 }
 export function registerScreenTools(server) {
     // ─── inspect_screen ──────────────────────────────────────────────────────────
-    server.tool("inspect_screen", "Returns the current view hierarchy for a booted iOS simulator or Android device. " +
+    server.tool("inspect_screen", "Returns the current view hierarchy for a booted iOS simulator (podium's target platform). " +
         "Uses idb's flat accessibility tree when idb is installed (fast), else maestro hierarchy. " +
         "Defaults to compact:true — a flattened list of only the nodes that carry text / " +
         "accessibility labels / resource-ids (dramatically smaller than the raw tree). Pass " +
@@ -114,9 +114,9 @@ export function registerScreenTools(server) {
         bundleId: z
             .string()
             .describe("App bundle identifier (e.g. com.example.MyApp). Required by Maestro."),
-        text: z.string().optional().describe("Element text or regex to tap on"),
+        text: z.string().optional().describe("Element text or regex. Matches the FULL label/value case-insensitively (anchored ^…$); an invalid regex falls back to a substring match."),
         id: z.string().optional().describe("Accessibility ID of the element"),
-        x: z.number().optional().describe("X coordinate (absolute px or percent string not yet supported via number)"),
+        x: z.number().optional().describe("X coordinate in logical points (numeric only; percent strings are not supported)"),
         y: z.number().optional().describe("Y coordinate — required when x is provided"),
         double: z.boolean().optional().describe("Use doubleTapOn instead of tapOn"),
         long: z.boolean().optional().describe("Use longPressOn instead of tapOn"),
@@ -227,47 +227,16 @@ export function registerScreenTools(server) {
         timeoutMs: z.number().int().optional().describe("Flow timeout in ms"),
         noLaunch: z.boolean().optional().describe("Skip the implicit launchApp attach step (default false). Set true when an open modal or navigation state must not be disturbed."),
     }, async ({ udid, bundleId, text, submit, timeoutMs, noLaunch }) => {
-        // Native fast-path. When submit is requested the backend must also be
-        // able to press Enter natively — otherwise the whole op stays on Maestro.
-        const be = await getBackend();
-        if (be && (!submit || be.canPressKey("enter"))) {
-            const r = await be.inputText(udid, text);
-            if (r.code === 0) {
-                if (submit) {
-                    const k = await be.pressKey(udid, "enter");
-                    if (k && k.code === 0) {
-                        return okResult({ ok: true, text, submit: true, backend: be.name });
-                    }
-                    // Text is already typed — falling back to Maestro would re-type it.
-                    return errorResult(`input_text: text typed (backend: ${be.name}) but Enter failed: ${k ? k.stderr || k.stdout : "no mapping"}. ` +
-                        "Retry submit via press_key.");
-                }
-                else {
-                    return okResult({ ok: true, text, submit: false, backend: be.name });
-                }
-            }
-            // native input failed — fall through to Maestro
+        const g = await nativeInputText(udid, text, {
+            submit,
+            bundleId,
+            timeoutMs: timeoutMs ?? 30_000,
+            launchApp: !noLaunch,
+        });
+        if (!g.ok) {
+            return errorResult(`input_text failed (backend ${g.backend}): ${g.detail ?? "flow did not pass"}`);
         }
-        const lines = [
-            `appId: ${bundleId}`,
-            `---`,
-            ...(noLaunch ? [] : [`- launchApp:`, `    stopApp: false`]),
-            `- inputText: ${JSON.stringify(text)}`,
-        ];
-        if (submit) {
-            lines.push(`- pressKey: "Enter"`);
-        }
-        const yaml = lines.join("\n");
-        try {
-            const result = await runMaestroFlow({ udid, yaml, timeoutMs: timeoutMs ?? 30_000 });
-            if (!result.passed) {
-                return errorResult(`input_text flow did not pass (retries: ${result.retries}):\n${result.rawOutput}`);
-            }
-            return okResult({ ok: true, text, submit: submit ?? false, retries: result.retries });
-        }
-        catch (err) {
-            return errorResult(`input_text failed: ${String(err)}`);
-        }
+        return okResult({ ok: true, text, submit: g.submit ?? false, backend: g.backend });
     });
     // ─── swipe ───────────────────────────────────────────────────────────────────
     server.tool("swipe", "Swipes in a direction or between two coordinates via an ephemeral Maestro flow. " +
@@ -285,74 +254,19 @@ export function registerScreenTools(server) {
         timeoutMs: z.number().int().optional().describe("Flow timeout in ms"),
         noLaunch: z.boolean().optional().describe("Skip the implicit launchApp attach step (default false). Set true when an open modal or navigation state must not be disturbed."),
     }, async ({ udid, bundleId, direction, startX, startY, endX, endY, timeoutMs, noLaunch }) => {
-        // Native fast-path: resolve coordinates (defaults by direction, or the
-        // explicit overrides — supporting both "35%" and pixel-style values)
-        // against the logical screen size. Falls through to Maestro on any gap.
-        const be = await getBackend();
-        if (be) {
-            const dims = await be.screenPoints(udid);
-            if (dims) {
-                let pts = null;
-                if (startX !== undefined &&
-                    startY !== undefined &&
-                    endX !== undefined &&
-                    endY !== undefined) {
-                    const x1 = resolveCoord(startX, dims.w);
-                    const y1 = resolveCoord(startY, dims.h);
-                    const x2 = resolveCoord(endX, dims.w);
-                    const y2 = resolveCoord(endY, dims.h);
-                    if (x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
-                        pts = { x1, y1, x2, y2 };
-                    }
-                }
-                else {
-                    const cx = dims.w / 2;
-                    const cy = dims.h / 2;
-                    pts =
-                        direction === "up"
-                            ? { x1: cx, y1: dims.h * 0.7, x2: cx, y2: dims.h * 0.3 }
-                            : direction === "down"
-                                ? { x1: cx, y1: dims.h * 0.3, x2: cx, y2: dims.h * 0.7 }
-                                : direction === "left"
-                                    ? { x1: dims.w * 0.8, y1: cy, x2: dims.w * 0.2, y2: cy }
-                                    : { x1: dims.w * 0.2, y1: cy, x2: dims.w * 0.8, y2: cy };
-                }
-                if (pts) {
-                    const r = await be.swipe(udid, pts.x1, pts.y1, pts.x2, pts.y2);
-                    if (r.code === 0) {
-                        return okResult({ ok: true, direction, backend: be.name, points: pts });
-                    }
-                    // native swipe failed — fall through to Maestro
-                }
-            }
+        const overrides = startX !== undefined && startY !== undefined && endX !== undefined && endY !== undefined
+            ? { startX, startY, endX, endY }
+            : undefined;
+        const g = await nativeSwipe(udid, { direction, overrides }, { bundleId, timeoutMs: timeoutMs ?? 30_000, launchApp: !noLaunch });
+        if (!g.ok) {
+            return errorResult(`swipe failed (backend ${g.backend}): ${g.detail ?? "flow did not pass"}`);
         }
-        let swipeLine;
-        if (startX !== undefined && startY !== undefined && endX !== undefined && endY !== undefined) {
-            swipeLine = `- swipe:\n    start: "${startX},${startY}"\n    end: "${endX},${endY}"`;
-        }
-        else {
-            swipeLine = `- swipe:\n    direction: ${direction.toUpperCase()}`;
-        }
-        const yaml = [
-            `appId: ${bundleId}`,
-            `---`,
-            ...(noLaunch ? [] : [`- launchApp:`, `    stopApp: false`]),
-            swipeLine,
-        ].join("\n");
-        try {
-            const result = await runMaestroFlow({ udid, yaml, timeoutMs: timeoutMs ?? 30_000 });
-            if (!result.passed) {
-                return errorResult(`swipe flow did not pass (retries: ${result.retries}):\n${result.rawOutput}`);
-            }
-            return okResult({ ok: true, direction, retries: result.retries });
-        }
-        catch (err) {
-            return errorResult(`swipe failed: ${String(err)}`);
-        }
+        return okResult({ ok: true, direction, backend: g.backend, ...(g.points ? { points: g.points } : {}) });
     });
     // ─── press_key ───────────────────────────────────────────────────────────────
-    server.tool("press_key", "Presses a hardware or system key via an ephemeral Maestro flow. " +
-        "back/power/tab are Android-only. " +
+    server.tool("press_key", "Presses a hardware or system key via an ephemeral Maestro flow on the iOS simulator. " +
+        "Note: back/power/tab are Android key events and have no effect on iOS — they remain in the " +
+        "enum for a future Android backend. " +
         "Valid keys: " + KEY_VALUES.join(", "), {
         udid: z.string().describe("Simulator / device UDID"),
         bundleId: z.string().describe("App bundle identifier"),
@@ -360,31 +274,15 @@ export function registerScreenTools(server) {
         timeoutMs: z.number().int().optional().describe("Flow timeout in ms"),
         noLaunch: z.boolean().optional().describe("Skip the implicit launchApp attach step (default false). Set true when an open modal or navigation state must not be disturbed."),
     }, async ({ udid, bundleId, key, timeoutMs, noLaunch }) => {
-        // Native fast-path for keys the backend maps (home/lock/volume/enter/…).
-        const be = await getBackend();
-        if (be && be.canPressKey(key)) {
-            const r = await be.pressKey(udid, key);
-            if (r && r.code === 0) {
-                return okResult({ ok: true, key, backend: be.name });
-            }
-            // native press failed — fall through to Maestro
+        const g = await nativeKey(udid, key, {
+            bundleId,
+            timeoutMs: timeoutMs ?? 15_000,
+            launchApp: !noLaunch,
+        });
+        if (!g.ok) {
+            return errorResult(`press_key failed (backend ${g.backend}): ${g.detail ?? "flow did not pass"}`);
         }
-        const yaml = [
-            `appId: ${bundleId}`,
-            `---`,
-            ...(noLaunch ? [] : [`- launchApp:`, `    stopApp: false`]),
-            `- pressKey: ${JSON.stringify(fmtKey(key))}`,
-        ].join("\n");
-        try {
-            const result = await runMaestroFlow({ udid, yaml, timeoutMs: timeoutMs ?? 15_000 });
-            if (!result.passed) {
-                return errorResult(`press_key flow did not pass (retries: ${result.retries}):\n${result.rawOutput}`);
-            }
-            return okResult({ ok: true, key, retries: result.retries });
-        }
-        catch (err) {
-            return errorResult(`press_key failed: ${String(err)}`);
-        }
+        return okResult({ ok: true, key, backend: g.backend });
     });
     // ─── orientation_set ─────────────────────────────────────────────────────────
     const ORIENTATION_VALUES = [
@@ -432,11 +330,16 @@ export function registerScreenTools(server) {
     });
     // ─── tap_with_fallback ───────────────────────────────────────────────────────
     server.tool("tap_with_fallback", "Sends a raw coordinate tap via the native backend (idb if installed, else a Maestro " +
-        "tapOn-point fallback), then verifies registration by comparing before/after screenshot " +
-        "file sizes. If no screen change is detected, retries at y - offsetStep increments up to " +
-        "maxRetries times. Useful for WKWebView game overlays where visual position differs from " +
-        "the DOM hit-test position. The Maestro fallback needs an app context: pass bundleId, or " +
-        "the foreground app is auto-detected.", {
+        "tapOn-point fallback). Useful for WKWebView game overlays where visual position differs " +
+        "from the DOM hit-test position. The Maestro fallback needs an app context: pass bundleId, " +
+        "or the foreground app is auto-detected. " +
+        "VERIFICATION: 'ok' is decided primarily by a change in the native accessibility element " +
+        "set before/after the tap (stable under animation/video). When no native backend is present " +
+        "it falls back to a screenshot byte-size delta (weak — animation can flip it). The result's " +
+        "`oracle` field reports which was used ('a11y-change' | 'screenshot-bytesize' | 'unverified'). " +
+        "For WebView-rendered targets the a11y tree won't change → oracle:'unverified'; confirm via " +
+        "webview_inspect. offsetStep defaults to 0 (tap the exact point); set it >0 only to " +
+        "deliberately probe nearby y-offsets on retry.", {
         udid: z.string().describe("Simulator / device UDID"),
         x: z.number().describe("X coordinate in logical points"),
         y: z.number().describe("Y coordinate in logical points"),
@@ -445,38 +348,76 @@ export function registerScreenTools(server) {
             .optional()
             .describe("App bundle id for the Maestro fallback (ignored when idb is present). Auto-detected if omitted."),
         maxRetries: z.number().int().min(1).max(10).default(3).describe("Maximum tap attempts (default 3)"),
-        offsetStep: z.number().default(15).describe("Y offset step in pixels per retry (default 15)"),
+        offsetStep: z
+            .number()
+            .min(0)
+            .default(0)
+            .describe("Opt-in Y offset step in px applied per retry (default 0 = always tap the exact point; no blind walk)."),
     }, async ({ udid, x, y, bundleId, maxRetries, offsetStep }) => {
         let attemptsUsed = 0;
         let offsetApplied = 0;
         let backend = "";
+        // Primary oracle = native a11y element-set change (stable under animation).
+        // Only when no native backend is available do we fall back to the weaker
+        // screenshot byte-size delta.
+        const be = await getBackend();
+        const oracle = be ? "a11y-change" : "screenshot-bytesize";
+        // Coordinate taps are inherently brittle — tell the agent the right fix.
+        const coord = { usedCoordinateFallback: true, targetingHint: targetingHint((await detectSurface(udid)).surface) };
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             const currentY = y - attempt * offsetStep;
             offsetApplied = attempt * offsetStep;
             attemptsUsed = attempt + 1;
-            const ts = Date.now();
-            const beforePath = join(os.tmpdir(), `podium-tap-before-${ts}.png`);
-            const afterPath = join(os.tmpdir(), `podium-tap-after-${ts}.png`);
-            try {
-                // Take before screenshot
-                const beforeSnap = await run("xcrun", ["simctl", "io", udid, "screenshot", beforePath], { timeout: 15_000 });
-                if (beforeSnap.code !== 0) {
-                    return errorResult(`tap_with_fallback: screenshot before failed: ${beforeSnap.stderr || beforeSnap.stdout}`);
-                }
-                // Send the tap via the native backend (idb → maestro fallback)
+            if (be) {
+                // ── a11y structural-change oracle ──
+                const beforeSig = elementSignature(await be.describeAll(udid));
                 const tap = await nativeTap(udid, x, currentY, { bundleId });
                 backend = tap.backend;
                 if (!tap.ok) {
                     return errorResult(`tap_with_fallback: tap failed (backend: ${tap.backend}): ${tap.detail}`);
                 }
-                // Wait 1.5 seconds for screen change
                 await new Promise((resolve) => setTimeout(resolve, 1500));
-                // Take after screenshot
+                const afterSig = elementSignature(await be.describeAll(udid));
+                if (beforeSig === null || afterSig === null) {
+                    // Element tree unreadable (e.g. WebView-only content) — tap was
+                    // delivered but we can't verify structurally. Report unverified
+                    // rather than a false negative; agent should confirm via webview_inspect.
+                    return okResult({
+                        ok: true,
+                        backend,
+                        tappedAt: { x, y: currentY },
+                        attemptsUsed,
+                        offsetApplied,
+                        oracle: "unverified",
+                        note: "tap delivered; native a11y tree unreadable (WebView content?) — verify via webview_inspect",
+                        ...coord,
+                    });
+                }
+                if (afterSig !== beforeSig) {
+                    return okResult({ ok: true, backend, tappedAt: { x, y: currentY }, attemptsUsed, offsetApplied, oracle, ...coord });
+                }
+                // no structural change — retry at next offset
+                continue;
+            }
+            // ── screenshot byte-size fallback (no native backend) ──
+            const ts = Date.now();
+            const beforePath = join(os.tmpdir(), `podium-tap-before-${ts}.png`);
+            const afterPath = join(os.tmpdir(), `podium-tap-after-${ts}.png`);
+            try {
+                const beforeSnap = await run("xcrun", ["simctl", "io", udid, "screenshot", beforePath], { timeout: 15_000 });
+                if (beforeSnap.code !== 0) {
+                    return errorResult(`tap_with_fallback: screenshot before failed: ${beforeSnap.stderr || beforeSnap.stdout}`);
+                }
+                const tap = await nativeTap(udid, x, currentY, { bundleId });
+                backend = tap.backend;
+                if (!tap.ok) {
+                    return errorResult(`tap_with_fallback: tap failed (backend: ${tap.backend}): ${tap.detail}`);
+                }
+                await new Promise((resolve) => setTimeout(resolve, 1500));
                 const afterSnap = await run("xcrun", ["simctl", "io", udid, "screenshot", afterPath], { timeout: 15_000 });
                 if (afterSnap.code !== 0) {
                     return errorResult(`tap_with_fallback: screenshot after failed: ${afterSnap.stderr || afterSnap.stdout}`);
                 }
-                // Compare sizes: if within ±2% treat as same (no change)
                 let beforeSize = 0;
                 let afterSize = 0;
                 try {
@@ -484,37 +425,37 @@ export function registerScreenTools(server) {
                     afterSize = (await stat(afterPath)).size;
                 }
                 catch {
-                    // If we can't stat, assume success
-                    return okResult({ ok: true, backend, tappedAt: { x, y: currentY }, attemptsUsed, offsetApplied });
+                    return okResult({ ok: true, backend, tappedAt: { x, y: currentY }, attemptsUsed, offsetApplied, oracle: "unverified", ...coord });
                 }
                 const delta = Math.abs(afterSize - beforeSize);
                 const threshold = Math.max(beforeSize * 0.02, 1);
-                const tapRegistered = delta > threshold;
-                if (tapRegistered) {
-                    return okResult({ ok: true, backend, tappedAt: { x, y: currentY }, attemptsUsed, offsetApplied });
+                if (delta > threshold) {
+                    return okResult({ ok: true, backend, tappedAt: { x, y: currentY }, attemptsUsed, offsetApplied, oracle, ...coord });
                 }
-                // No change detected — try next offset on next iteration
             }
             finally {
                 await unlink(beforePath).catch(() => undefined);
                 await unlink(afterPath).catch(() => undefined);
             }
         }
-        // All attempts exhausted — the tap fired but no visible screen change was detected
+        // All attempts exhausted — tap fired but no change detected by the oracle.
         return okResult({
             ok: false,
             backend,
             tappedAt: { x, y: y - (maxRetries - 1) * offsetStep },
             attemptsUsed,
             offsetApplied: (maxRetries - 1) * offsetStep,
-            note: "tap was delivered but no screen change detected (target may be inert or off-screen)",
+            oracle,
+            note: "tap was delivered but no change detected (target may be inert, off-screen, or WebView-rendered)",
+            ...coord,
         });
     });
     // ─── notification_bar_clear ──────────────────────────────────────────────────
     server.tool("notification_bar_clear", "Attempts to dismiss the React Native debug notification bar that sometimes appears " +
         "at the bottom of the screen and intercepts taps. Taps the debug icons area at (50, 850) " +
-        "via the native backend (idb, else Maestro) and takes a before/after screenshot to report " +
-        "whether the bar was cleared.", {
+        "via the native backend (idb, else Maestro) and takes a before/after screenshot. " +
+        "NOTE: the (50,850) tap point is a device-specific heuristic, and 'cleared' is decided by a " +
+        "screenshot byte-size delta — a best-effort signal, not a guarantee (see tap_with_fallback caveat).", {
         udid: z.string().describe("Simulator / device UDID"),
         bundleId: z
             .string()
