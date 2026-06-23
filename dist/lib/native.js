@@ -13,6 +13,8 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { access, constants } from "node:fs/promises";
 import { run, commandExists } from "./exec.js";
+import { makeAdbBackend } from "./adb-backend.js";
+import { makeWdaBackend } from "./wda.js";
 import { idbAvailable, idbTap, idbSwipe, idbInputText, idbPressKey, idbCanPressKey, idbDescribeAll, } from "./idb.js";
 /** Center point of an element frame, or null when the frame is unusable. */
 export function elementCenter(el) {
@@ -290,4 +292,32 @@ export async function getBackend(overrides) {
     }
     negativeProbeAt = now();
     return null;
+}
+/**
+ * Per-target native backend selection (v0.3.0 seam — story M0b).
+ *
+ * The gesture/inspect backend depends on the device platform:
+ *   - ios-sim / ios-real → idb / mobilecli probe (getBackend). The ios-real WDA
+ *     backend lands in story B2; until then real iPhones use the same probe.
+ *   - android            → the adb backend (story A2). Returns null until then,
+ *     so callers fall back to Maestro Android.
+ *
+ * This replaces the implicit "one global backend" assumption without disturbing
+ * the existing iOS-sim path (getBackend stays the cached singleton for Apple
+ * platforms).
+ */
+export async function getBackendFor(platform, overrides) {
+    if (platform === "android") {
+        // The adb backend needs no probing beyond adb's presence; it is stateless.
+        return (await commandExists("adb")) ? makeAdbBackend() : null;
+    }
+    if (platform === "ios-real") {
+        // Opt-in WDA backend when a WebDriverAgent server URL is configured;
+        // otherwise idb/mobilecli (which can also drive real devices).
+        const wdaUrl = process.env.PODIUM_WDA_URL;
+        if (wdaUrl)
+            return makeWdaBackend(wdaUrl);
+        return getBackend(overrides);
+    }
+    return getBackend(overrides);
 }

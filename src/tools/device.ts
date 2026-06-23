@@ -20,6 +20,7 @@ import {
 } from "../lib/simctl.js";
 import { startRecording, stopRecording } from "../lib/recording.js";
 import { getBackend } from "../lib/native.js";
+import { parseAdbDevices } from "../lib/adb.js";
 
 import { errorResult, okResult } from "../lib/result.js";
 
@@ -48,24 +49,16 @@ export function registerDeviceTools(server: McpServer): void {
       if (!adbPresent) {
         androidSection = { available: false, reason: "adb not found" };
       } else {
-        const adbResult = await run("adb", ["devices"]);
+        const adbResult = await run("adb", ["devices", "-l"]);
         if (adbResult.code !== 0) {
           androidSection = { available: false, reason: adbResult.stderr || adbResult.stdout };
         } else {
-          const lines = adbResult.stdout
-            .split("\n")
-            .slice(1)
-            .map((l) => l.trim())
-            .filter((l) => l.length > 0);
-          const devices = lines.map((l) => {
-            const [serial, status] = l.split(/\s+/);
-            return { serial, status };
-          });
-          androidSection = { available: true, devices };
+          androidSection = { available: true, devices: parseAdbDevices(adbResult.stdout) };
         }
       }
 
-      return okResult({ ios: iosResult.devices, android: androidSection });
+      const ios = iosResult.devices.map((d) => ({ ...d, platform: "ios-sim" as const }));
+      return okResult({ ios, android: androidSection });
     }
   );
 

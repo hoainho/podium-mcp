@@ -4,14 +4,14 @@
 
 **One baton. Every instrument.**
 
-A single MCP stdio endpoint with **43 tools** for iOS-simulator control, native UI automation, end-to-end flows, **trustworthy assertions**, React Native debugging, and **WebView DOM + network inspection** — one connection instead of half a dozen servers.
+A single MCP stdio endpoint with **47 tools** for **iOS (simulator + real) and Android** device control, native UI automation, end-to-end flows, trustworthy assertions, React Native debugging, **WebView DOM + network inspection**, and **no-vision Unity/WebGL/GL game-engine automation** — one connection instead of half a dozen servers.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7C3AED)](https://modelcontextprotocol.io)
-[![Tools](https://img.shields.io/badge/tools-43-7C3AED.svg)](#the-43-tools)
-[![Tests](https://img.shields.io/badge/tests-182%20passing-brightgreen.svg)](#development--testing)
+[![Tools](https://img.shields.io/badge/tools-47-7C3AED.svg)](#the-47-tools)
+[![Tests](https://img.shields.io/badge/tests-260%20passing-brightgreen.svg)](#development--testing)
 [![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
 [![mcp.so](https://img.shields.io/badge/mcp.so-listed-7C3AED)](https://mcp.so/server/io.github.hoainho/podium-mcp)
 
@@ -25,16 +25,27 @@ A single MCP stdio endpoint with **43 tools** for iOS-simulator control, native 
 
 ---
 
-A podium is where a maestro stands — one place to conduct the whole orchestra. This MCP server unifies six capability sets behind a single stdio endpoint:
+A podium is where a maestro stands — one place to conduct the whole orchestra. This MCP server unifies eight capability sets behind a single stdio endpoint:
 
-- **Device & app management** — `simctl`, with graceful `adb` detection.
+- **Device & app management** — iOS simulators (`simctl`), real iPhones (`devicectl`), and Android (`adb`) behind one platform-tagged device model.
 - **Native UI inspection & gestures** — route through `idb`/`mobilecli` with a Maestro fallback (no per-gesture JVM spin-up).
 - **End-to-end flows & batch automation** — declarative Maestro flows, ordered action batches, and an engineer→QA flow exporter.
 - **Trustworthy assertions** — an *oracle ladder* (WebView-DOM › native a11y › Maestro) that returns falsifiable, evidenced verdicts and **fails closed**.
 - **WebView DOM + network** — resolve `WKWebView` DOM to tap coordinates, evaluate JS, drive navigation, and capture in-page HTTP traffic as JSON/HAR.
 - **React Native debugging** — Metro console logs, network requests, and in-app state over CDP, plus host/simulator crash reports.
+- **Real devices** — Android emulator/device via `adb` (gestures + `uiautomator` hierarchy); real iOS via `devicectl` lifecycle + an opt-in WebDriverAgent backend.
+- **Game-engine automation, no vision** — drive Unity/WebGL/GL objects by name/path/component with engine-reported screen coordinates, via AltTester (native) or a WebGL-in-WebView CDP bridge.
 
 Rather than wiring several MCP servers into every client config, `podium-mcp` exposes everything behind **one connection**, with a shared `execFile` layer (no shell), consistent structured errors, automatic retry around Maestro's iOS-driver flakiness, and a single health-check tool to confirm what's available on the host.
+
+## What's new in v0.3.0
+
+- **Android (emulator + real)** — an `adb` platform driver + gesture/inspect backend; `tap_on` / `swipe` / `input_text` / `inspect_screen` now work on Android, with the view hierarchy from `uiautomator dump`.
+- **Real iOS device** — a `devicectl` lifecycle driver and an opt-in **WebDriverAgent** backend (`PODIUM_WDA_URL`); missing signing / iOS-17 tunnel prerequisites fail closed with guidance. See [`docs/real-device-ios-runbook.md`](docs/real-device-ios-runbook.md).
+- **No-vision game-engine automation** — `engine_inspect` / `engine_tap` / `engine_swipe` / `engine_call` address Unity/GL objects by name/path/component with screen coordinates (never screenshots), via an **AltTester** bridge or a **WebGL-in-WebView** CDP bridge. Requires an instrumented build; fails closed otherwise. (tool count 43 → **47**)
+- **Multi-platform device model** — a `DeviceTarget { platform }` abstraction + `PlatformDriver` registry select the right backend per target; the iOS-sim path is unchanged.
+
+> Real-device and engine paths land code-complete with unit/integration coverage; live e2e on a real emulator/device and an AltTester-instrumented Unity sample run on hardware (see `e2e/android-smoke.e2e.mjs`, `e2e/engine-smoke.e2e.mjs`, and the iOS runbook).
 
 ## What's new in v0.2.0
 
@@ -53,7 +64,7 @@ Rather than wiring several MCP servers into every client config, `podium-mcp` ex
 - [Install](#install)
 - [Usage](#usage)
 - [Quick start](#quick-start-order-of-use)
-- [The 43 tools](#the-43-tools)
+- [The 47 tools](#the-47-tools)
 - [The oracle ladder — trustworthy assertions](#the-oracle-ladder--trustworthy-assertions)
 - [Native-first gesture backend](#native-first-gesture-backend)
 - [WebView & RN network introspection](#webview--rn-network-introspection)
@@ -101,7 +112,7 @@ No manual config — one-time marketplace setup, then install:
 /plugin install podium-mcp@podium
 ```
 
-The plugin auto-starts the MCP server (all 43 tools) and ships four skills:
+The plugin auto-starts the MCP server (all 47 tools) and ships four skills:
 
 | Skill | Invoke | What it does |
 |---|---|---|
@@ -166,15 +177,28 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 6. **Inspect WebViews** — `webview_inspect` → tap coordinates, `webview_eval`, `webview_navigate`, `webview_network`.
 7. **Capture & debug** — `screenshot` / `record_start`→`record_stop`; `metro_logs` / `metro_network` / `metro_state`; `crash_list` / `crash_get`.
 
-## The 43 tools
+## The 47 tools
 
 > Every tool returns structured JSON and never throws — failures come back as MCP tool errors. See [`docs/tool-catalog.md`](docs/tool-catalog.md) for the authoritative per-parameter reference.
+>
+> **Platform support (v0.3.0):** the gesture / inspect / lifecycle tools below run on **iOS simulators**, **real iPhones** (`devicectl` + opt-in WebDriverAgent via `PODIUM_WDA_URL`), and **Android** (emulator/device via `adb`; hierarchy from `uiautomator`). `device_list` tags each device with its platform and the backend is selected per target.
+
+### Game engine — Unity / WebGL / GL, no vision (4)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `engine_inspect` | udid, by?, value | AltTester (TCP) / WebGL CDP bridge | Lists engine objects (by name/path/component/text) with absolute screen coords — **no screenshots** |
+| `engine_tap` | udid, by?, value | AltTester / CDP | Resolves the object and taps its screen coordinates |
+| `engine_swipe` | udid, fromX/Y, toX/Y, durationMs? | AltTester / CDP | Swipe inside the engine view |
+| `engine_call` | udid, by?, value, component, method, parameters? | AltTester / CDP | Invokes a C# component method by reflection (the engine analog of a DOM event handler) |
+
+> Engine tools require an **AltTester-instrumented build** (dev/staging) reachable on the forwarded port, or a `window.__podiumEngine` bridge for WebGL-in-WebView. On a non-instrumented build they **fail closed** with an actionable error — never a vision fallback.
 
 ### Health & toolchain (1)
 
 | Tool | Key params | Backing engine | Behavior |
 |---|---|---|---|
-| `podium_health` | — | `which` probes | Never fails; reports `toolchain { xcrun, maestro, adb }`, native backend, and `platform: ios-simulator` |
+| `podium_health` | — | `which` probes | Never fails; reports `toolchain { xcrun, maestro, adb }`, native backend, and `platforms: [ios-sim, ios-real, android]` |
 
 ### Device & simulator (6)
 
@@ -341,10 +365,12 @@ npm run typecheck   # tsc --noEmit
 npm test            # vitest run — 182 unit/integration tests (exec/network mocked, no sim needed)
 npm run benchmark   # spawn a fresh server over stdio and sweep the tool suite
 node e2e/smoke.e2e.mjs        # real E2E against a booted simulator (macOS + Xcode)
-node e2e/full-smoke.e2e.mjs   # drives all 43 tool handlers (happy + structured-error paths)
+node e2e/full-smoke.e2e.mjs   # drives the iOS-sim tool handlers (happy + structured-error paths)
+node e2e/android-smoke.e2e.mjs # Android emulator/device smoke (story A3)
+node e2e/engine-smoke.e2e.mjs  # AltTester engine smoke; skips without an instrumented build (story C4)
 ```
 
-**182 tests across 16 files, all passing** — including the oracle ladder (`oracle`, `assert`, `validate`), recording watchdog + timestamps, gesture-parity (`screen` ≡ `steps`), HAR export, WebView, and Metro paths.
+**260 tests across 24 files, all passing** — including the v0.3.0 device-target registry, the Android `adb` driver + `uiautomator` parser, the AltTester engine client + WebGL bridge, the `devicectl`/WDA real-iOS parsers, plus the v0.2.0 oracle ladder, recording watchdog, gesture-parity, HAR export, WebView, and Metro paths.
 
 Standards: TypeScript strict, **no `as any` / `@ts-ignore`**, **no shell execution** (all commands via `lib/exec.ts`), tools return structured errors instead of throwing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the "add a new tool" checklist.
 
@@ -367,7 +393,7 @@ versions are immutable.
 
 ## Design ideas
 
-- **One podium, one connection.** A single server fronts every mobile capability so an agent configures one endpoint and discovers all 43 tools at once.
+- **One podium, one connection.** A single server fronts every mobile capability so an agent configures one endpoint and discovers all 47 tools at once.
 - **Safe by construction.** Every external command runs through an `execFile` layer with an explicit argument array — never a shell string.
 - **Never crash the conductor.** Tools return structured results and errors instead of throwing; one bad call can't take the server down.
 - **Degrade, don't fail.** A missing toolchain (e.g. Android's `adb`) yields an informative result rather than a hard error.

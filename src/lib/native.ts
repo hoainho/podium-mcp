@@ -14,6 +14,9 @@ import { dirname, join } from "node:path";
 import { access, constants } from "node:fs/promises";
 import { run, commandExists } from "./exec.js";
 import type { RunResult } from "./exec.js";
+import type { Platform } from "./device-target.js";
+import { makeAdbBackend } from "./adb-backend.js";
+import { makeWdaBackend } from "./wda.js";
 import {
   idbAvailable,
   idbTap,
@@ -80,7 +83,7 @@ export function findElements(
 // ─── Backend interface ───────────────────────────────────────────────────────
 
 export interface NativeBackend {
-  name: "idb" | "mobilecli";
+  name: "idb" | "mobilecli" | "adb" | "wda";
   tap(udid: string, x: number, y: number): Promise<RunResult>;
   swipe(
     udid: string,
@@ -373,4 +376,35 @@ export async function getBackend(overrides?: BackendProbeOverrides): Promise<Nat
 
   negativeProbeAt = now();
   return null;
+}
+
+/**
+ * Per-target native backend selection (v0.3.0 seam — story M0b).
+ *
+ * The gesture/inspect backend depends on the device platform:
+ *   - ios-sim / ios-real → idb / mobilecli probe (getBackend). The ios-real WDA
+ *     backend lands in story B2; until then real iPhones use the same probe.
+ *   - android            → the adb backend (story A2). Returns null until then,
+ *     so callers fall back to Maestro Android.
+ *
+ * This replaces the implicit "one global backend" assumption without disturbing
+ * the existing iOS-sim path (getBackend stays the cached singleton for Apple
+ * platforms).
+ */
+export async function getBackendFor(
+  platform: Platform,
+  overrides?: BackendProbeOverrides
+): Promise<NativeBackend | null> {
+  if (platform === "android") {
+    // The adb backend needs no probing beyond adb's presence; it is stateless.
+    return (await commandExists("adb")) ? makeAdbBackend() : null;
+  }
+  if (platform === "ios-real") {
+    // Opt-in WDA backend when a WebDriverAgent server URL is configured;
+    // otherwise idb/mobilecli (which can also drive real devices).
+    const wdaUrl = process.env.PODIUM_WDA_URL;
+    if (wdaUrl) return makeWdaBackend(wdaUrl);
+    return getBackend(overrides);
+  }
+  return getBackend(overrides);
 }

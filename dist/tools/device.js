@@ -7,6 +7,7 @@ import { run } from "../lib/exec.js";
 import { listDevicesCached, boot, install, launch, terminate, screenshot, openUrl, setLocation, listApps, uninstall, measureScreen, } from "../lib/simctl.js";
 import { startRecording, stopRecording } from "../lib/recording.js";
 import { getBackend } from "../lib/native.js";
+import { parseAdbDevices } from "../lib/adb.js";
 import { errorResult, okResult } from "../lib/result.js";
 /** adb presence rarely changes mid-session — probe once. */
 let adbPresentCache;
@@ -27,24 +28,16 @@ export function registerDeviceTools(server) {
             androidSection = { available: false, reason: "adb not found" };
         }
         else {
-            const adbResult = await run("adb", ["devices"]);
+            const adbResult = await run("adb", ["devices", "-l"]);
             if (adbResult.code !== 0) {
                 androidSection = { available: false, reason: adbResult.stderr || adbResult.stdout };
             }
             else {
-                const lines = adbResult.stdout
-                    .split("\n")
-                    .slice(1)
-                    .map((l) => l.trim())
-                    .filter((l) => l.length > 0);
-                const devices = lines.map((l) => {
-                    const [serial, status] = l.split(/\s+/);
-                    return { serial, status };
-                });
-                androidSection = { available: true, devices };
+                androidSection = { available: true, devices: parseAdbDevices(adbResult.stdout) };
             }
         }
-        return okResult({ ios: iosResult.devices, android: androidSection });
+        const ios = iosResult.devices.map((d) => ({ ...d, platform: "ios-sim" }));
+        return okResult({ ios, android: androidSection });
     });
     // ─── device_boot ────────────────────────────────────────────────────────────
     server.tool("device_boot", "Boots an iOS simulator by UDID. Waits up to 30 seconds for the boot command to complete. Idempotent: booting an already-booted device returns ok with alreadyBooted:true.", { udid: z.string().describe("Simulator UDID (from device_list)") }, async ({ udid }) => {
