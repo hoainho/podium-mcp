@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎙️ podium-mcp
+# podium-mcp
 
 **One baton. Every instrument.**
 
@@ -38,13 +38,13 @@ Rather than wiring several MCP servers into every client config, `podium-mcp` ex
 
 ## What's new in v0.2.0
 
-- 🎯 **Oracle ladder + trustworthy verdicts** — `assert_visible` / `assert_text` / `assert_not_visible` / `wait_for_element` and `validate_flow` verify state through WebView-DOM › native a11y › Maestro, returning **evidenced** results that fail closed instead of guessing "looks ok".
-- 🔁 **Batch & export** — `run_steps` runs an ordered action batch in one call via the native backend; `export_flow` turns that batch into a reusable Maestro flow (the engineer→QA bridge).
-- 🌐 **WebView network capture** — `webview_network` records in-WebView `fetch`/`XHR` traffic and exports redacted **JSON or HAR 1.2** (the network path `metro_network` can't see for WebView-hosted apps).
-- 🐛 **Deeper RN introspection** — `metro_network` (CDP Network domain) and `metro_state` (read the in-app Redux store) join `metro_logs`.
-- ⚡ **Native-first gesture backend** — `idb`/`mobilecli` cut `tap_on` ~14.7 s → ~0.6 s and `inspect_screen` ~8.9 s → ~0.9 s, with a Maestro fallback that preserves app state.
-- 🛡️ **Reliability hardening** — explicit per-command timeouts with a `timedOut` flag, timestamped recordings + a duration watchdog, native-backend re-probe TTL, exact bundle-id matching, and transparent iOS-simulator scope.
-- 📦 **Registry-ready** — `server.json` manifest + OIDC publish to the official MCP Registry, test-gated before every publish.
+- **Oracle ladder + trustworthy verdicts** — `assert_visible` / `assert_text` / `assert_not_visible` / `wait_for_element` and `validate_flow` verify state through WebView-DOM › native a11y › Maestro, returning **evidenced** results that fail closed instead of guessing "looks ok".
+- **Batch & export** — `run_steps` runs an ordered action batch in one call via the native backend; `export_flow` turns that batch into a reusable Maestro flow (the engineer→QA bridge).
+- **WebView network capture** — `webview_network` records in-WebView `fetch`/`XHR` traffic and exports redacted **JSON or HAR 1.2** (the network path `metro_network` can't see for WebView-hosted apps).
+- **Deeper RN introspection** — `metro_network` (CDP Network domain) and `metro_state` (read the in-app Redux store) join `metro_logs`.
+- **Native-first gesture backend** — `idb`/`mobilecli` cut `tap_on` ~14.7 s → ~0.6 s and `inspect_screen` ~8.9 s → ~0.9 s, with a Maestro fallback that preserves app state.
+- **Reliability hardening** — explicit per-command timeouts with a `timedOut` flag, timestamped recordings + a duration watchdog, native-backend re-probe TTL, exact bundle-id matching, and transparent iOS-simulator scope.
+- **Registry-ready** — `server.json` manifest + OIDC publish to the official MCP Registry, test-gated before every publish.
 
 ## Table of contents
 
