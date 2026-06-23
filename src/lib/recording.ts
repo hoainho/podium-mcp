@@ -1,9 +1,16 @@
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
+import { run, commandExists } from "./exec.js";
+import { resolvePlatform } from "./device-target.js";
+import type { Platform } from "./device-target.js";
 
 interface RecordingEntry {
   pid: number;
   path: string;
+  platform: Platform;
+  udid: string;
+  /** android: on-device temp file pulled to `path` on stop. */
+  devicePath?: string;
   /** Watchdog that SIGINTs the recorder after the max-duration cap; cleared on stop. */
   watchdog?: ReturnType<typeof setTimeout>;
 }
@@ -26,9 +33,35 @@ export function activeRecordings(): number {
 }
 
 /**
- * Starts a screen recording for the given simulator UDID.
+ * The screen-recorder command per platform (pure — exported for tests):
+ *   - ios-sim  → `xcrun simctl io <udid> recordVideo` (host-side file, SIGINT-stop)
+ *   - ios-real → `idb record-video <path> --udid <udid>` (host-side file, SIGINT-stop)
+ *   - android  → `adb -s <udid> shell screenrecord <devicePath>` (on-device file,
+ *     pulled to the host on stop)
+ */
+export function recordingCommand(
+  platform: Platform,
+  udid: string,
+  savePath: string,
+  devicePath: string
+): { cmd: string; args: string[] } {
+  if (platform === "android") {
+    return { cmd: "adb", args: ["-s", udid, "shell", "screenrecord", devicePath] };
+  }
+  if (platform === "ios-real") {
+    return { cmd: "idb", args: ["record-video", savePath, "--udid", udid] };
+  }
+  return {
+    cmd: "xcrun",
+    args: ["simctl", "io", udid, "recordVideo", "--codec=h264", "--force", savePath],
+  };
+}
+
+/**
+ * Starts a screen recording for the given device (iOS sim/real or Android).
  * Uses a detached child process so it outlives any timeout.
- * Returns an error if a recording is already active for the given UDID.
+ * Returns an error if a recording is already active for the given UDID, or if
+ * the platform's recorder prerequisite (e.g. idb for real iOS) is missing.
  */
 export async function startRecording(
   udid: string,
@@ -38,14 +71,20 @@ export async function startRecording(
     return { ok: false, error: `recording already active for ${udid}` };
   }
 
-  const child = spawn(
-    "xcrun",
-    ["simctl", "io", udid, "recordVideo", "--codec=h264", "--force", savePath],
-    { detached: true, stdio: "ignore" }
-  );
+  const platform = await resolvePlatform(udid);
+  if (platform === "ios-real" && !(await commandExists("idb"))) {
+    return {
+      ok: false,
+      error: "real-iOS recording needs idb (brew install facebook/fb/idb-companion)",
+    };
+  }
+  const devicePath = `/sdcard/podium-rec-${Date.now()}.mp4`;
+  const { cmd, args } = recordingCommand(platform, udid, savePath, devicePath);
+
+  const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
 
   if (child.pid === undefined) {
-    return { ok: false, error: "failed to spawn recordVideo process — pid is undefined" };
+    return { ok: false, error: `failed to spawn ${cmd} recorder — pid is undefined` };
   }
 
   child.unref();
@@ -66,14 +105,23 @@ export async function startRecording(
     watchdog.unref();
   }
 
-  registry.set(udid, { pid: child.pid, path: savePath, watchdog });
+  registry.set(udid, {
+    pid: child.pid,
+    path: savePath,
+    platform,
+    udid,
+    devicePath: platform === "android" ? devicePath : undefined,
+    watchdog,
+  });
   return { ok: true, path: savePath, pid: child.pid };
 }
 
 /**
- * Stops the active recording for the given simulator UDID.
- * Sends SIGINT so xcrun simctl recordVideo flushes and finalizes the file.
- * Polls until the file size stabilizes (max ~8 s) before returning.
+ * Stops the active recording for the given UDID.
+ * - iOS (sim/real): SIGINT the host recorder so it flushes and finalizes the file,
+ *   then poll until the file size stabilizes.
+ * - Android: SIGINT `screenrecord` on the device so the mp4 finalizes, then
+ *   `adb pull` it to the host path.
  */
 export async function stopRecording(
   udid: string
@@ -85,6 +133,33 @@ export async function stopRecording(
 
   registry.delete(udid);
   if (entry.watchdog) clearTimeout(entry.watchdog);
+
+  if (entry.platform === "android" && entry.devicePath) {
+    // Stop screenrecord on-device (so the mp4 finalizes), then pull it to the host.
+    await run("adb", ["-s", entry.udid, "shell", "pkill", "-INT", "screenrecord"], {
+      timeout: 10_000,
+    });
+    try {
+      process.kill(entry.pid, "SIGINT");
+    } catch {
+      // local adb process already exited — fine
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+    const pull = await run("adb", ["-s", entry.udid, "pull", entry.devicePath, entry.path], {
+      timeout: 60_000,
+    });
+    await run("adb", ["-s", entry.udid, "shell", "rm", "-f", entry.devicePath], { timeout: 10_000 });
+    if (pull.code !== 0) {
+      return { ok: false, error: `adb pull failed: ${pull.stderr || pull.stdout}` };
+    }
+    let size = 0;
+    try {
+      size = (await stat(entry.path)).size;
+    } catch {
+      // non-fatal — report 0
+    }
+    return { ok: true, path: entry.path, sizeBytes: size };
+  }
 
   try {
     process.kill(entry.pid, "SIGINT");

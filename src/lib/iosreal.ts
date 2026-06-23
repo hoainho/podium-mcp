@@ -14,7 +14,7 @@
  * Hard prereqs for the live path (documented for the user): macOS, a paired &
  * trusted device, a valid provisioning profile, and on iOS 17+ an RSD tunnel.
  */
-import { run } from "./exec.js";
+import { run, commandExists } from "./exec.js";
 import type { RunResult } from "./exec.js";
 import type { PlatformDriver, DeviceTarget, DriverResult } from "./device-target.js";
 import { readFile, unlink } from "node:fs/promises";
@@ -101,9 +101,30 @@ export const iosRealDriver: PlatformDriver = {
     ok: false,
     error: `terminating ${bundleId} on a real iOS device ${WDA_NOTE}; devicectl has no stable terminate-by-bundle.`,
   }),
-  screenshot: async (_udid, outPath) => ({
-    ok: false,
-    error: `real-iOS screenshot to ${outPath} ${WDA_NOTE}.`,
-  }),
+  screenshot: async (udid, outPath) => {
+    // A real device screenshots via idb (needs idb_companion) or libimobiledevice;
+    // devicectl has no screenshot. Fail closed with install guidance when neither.
+    if (await commandExists("idb")) {
+      const r = await run("idb", ["screenshot", outPath, "--udid", udid], { timeout: 30_000 });
+      if (r.code === 0) return toResult(r);
+      // idb is installed but failed at runtime — almost always a missing/unstarted
+      // idb_companion. Surface that, not the raw Python traceback (verified on device).
+      return {
+        ok: false,
+        code: r.code,
+        error: `idb screenshot failed — ensure idb_companion is installed and the device is connected (brew install facebook/fb/idb-companion): ${(r.stderr || "").split("\n")[0]}`,
+      };
+    }
+    if (await commandExists("idevicescreenshot")) {
+      const r = await run("idevicescreenshot", ["-u", udid, outPath], { timeout: 30_000 });
+      if (r.code === 0) return toResult(r);
+      return { ok: false, code: r.code, error: `idevicescreenshot failed: ${(r.stderr || "").split("\n")[0]}` };
+    }
+    return {
+      ok: false,
+      error:
+        "real-iOS screenshot needs idb (brew install facebook/fb/idb-companion) or libimobiledevice (brew install libimobiledevice)",
+    };
+  },
   screenSize: async () => null, // provided via WDA (story B2)
 };

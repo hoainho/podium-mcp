@@ -30,7 +30,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Multi-platform device abstraction** — a `DeviceTarget { platform }` model
   and a `PlatformDriver` registry replace the iOS-Simulator-only assumption; the
   gesture/inspect backend is selected per target (`getBackendFor`). The existing
-  iOS-sim path is unchanged.
+  iOS-sim path is unchanged. `resolvePlatform()` derives a device's platform from
+  the live device list (a real CoreDevice iPhone UUID is indistinguishable from a
+  sim UDID by format — verified on an iPhone 12 Pro Max).
+- **Platform-aware capture** — `screenshot` and `record_start`/`record_stop` now
+  route by platform: iOS-sim (`simctl`), Android (`adb` screencap/pull and
+  `screenrecord`+pull), real iOS (`idb` screenshot / `idb record-video`). Real-iOS
+  capture fails closed with install guidance when `idb_companion` is absent.
 
 > Real-device (Android/iOS) and engine paths land code-complete with
 > unit/integration coverage. Live end-to-end on a real emulator/device and an
