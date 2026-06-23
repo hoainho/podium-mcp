@@ -23,7 +23,7 @@ const FIXTURE = JSON.stringify({
 describe("parseDevicectlDevices", () => {
   it("extracts iOS devices with name + connection state, filtering non-iOS", () => {
     expect(parseDevicectlDevices(FIXTURE)).toEqual([
-      { udid: "00008030-AAA", platform: "ios-real", name: "Nhon iPhone", state: "connected", transport: "usb" },
+      { udid: "00008030-AAA", platform: "ios-real", name: "Nhon iPhone", state: "paired", transport: "usb" },
     ]);
   });
 

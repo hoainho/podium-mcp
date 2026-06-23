@@ -110,9 +110,12 @@ const IOS_REAL_NEW = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}$/; // A12+ real iPhone UDI
  * enumeration (each driver tags its own devices); this is the fallback when a
  * tool is handed only a raw id.
  *
- * Heuristics:
- *   - simulator UDID  → 8-4-4-4-12 hex UUID                → "ios-sim"
- *   - real iPhone UDID → 40-hex, or 8-16 hex (single dash)  → "ios-real"
+ * Heuristics (best-effort only — prefer resolvePlatform() when correctness matters):
+ *   - 8-4-4-4-12 hex UUID → "ios-sim". ⚠️ A CoreDevice (Xcode 15+) real-iPhone
+ *     identifier has the SAME UUID format, so this CANNOT distinguish a real
+ *     device from a simulator — verified on hardware (iPhone 12 Pro Max →
+ *     E4EFAC0A-3C30-5424-9217-309584C18D2C). Only the enumerating driver knows.
+ *   - 40-hex / 8-16 hex   → "ios-real" (older, pre-CoreDevice real-iPhone UDIDs)
  *   - anything else (adb serial like emulator-5554, R5CT…) → "android"
  */
 export function detectPlatform(udid: string): Platform {
@@ -120,4 +123,17 @@ export function detectPlatform(udid: string): Platform {
   if (IOS_SIM_UUID.test(id)) return "ios-sim";
   if (IOS_REAL_40HEX.test(id) || IOS_REAL_NEW.test(id)) return "ios-real";
   return "android";
+}
+
+/**
+ * Authoritative platform for a device id: consult the live, driver-tagged
+ * inventory first (device_list). A simulator and a real device can share an
+ * identical CoreDevice UUID, so format alone cannot tell them apart — only the
+ * enumerating driver does. Falls back to the detectPlatform heuristic when the
+ * device isn't currently listed (offline, or no drivers registered).
+ */
+export async function resolvePlatform(udid: string): Promise<Platform> {
+  const id = udid.trim();
+  const target = (await listAllTargets()).find((t) => t.udid === id);
+  return target ? target.platform : detectPlatform(id);
 }

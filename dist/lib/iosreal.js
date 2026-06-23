@@ -60,7 +60,7 @@ export function parseDevicectlDevices(json) {
         const props = asObj(rec.deviceProperties);
         const conn = asObj(rec.connectionProperties);
         const name = asStr(props?.name) ?? asStr(rec.name) ?? udid;
-        const state = asStr(conn?.tunnelState) ?? asStr(conn?.pairingState) ?? "unknown";
+        const state = asStr(conn?.pairingState) ?? asStr(conn?.tunnelState) ?? "unknown";
         return [{ udid, platform: "ios-real", name, state, transport: "usb" }];
     });
 }

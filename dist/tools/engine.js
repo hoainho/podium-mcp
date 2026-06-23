@@ -13,7 +13,7 @@
  */
 import { z } from "zod";
 import { errorResult, okResult } from "../lib/result.js";
-import { detectPlatform } from "../lib/device-target.js";
+import { resolvePlatform } from "../lib/device-target.js";
 import { EngineClient, EngineError, forwardEnginePort, ENGINE_DEFAULT_PORT, } from "../lib/engine.js";
 import { createEngineTransport } from "../lib/engine-transport.js";
 let transportFactory = (host, port) => createEngineTransport(host, port);
@@ -25,7 +25,7 @@ const INSTRUMENT_NOTE = " Requires an AltTester-instrumented build (dev/staging)
     "production App Store builds are not instrumented. Uses no screenshots/vision.";
 const BY = z.enum(["name", "path", "component", "text", "id"]);
 async function connectEngine(udid) {
-    const platform = detectPlatform(udid);
+    const platform = await resolvePlatform(udid);
     const forwarded = await forwardEnginePort(platform, udid);
     if (!forwarded) {
         throw new EngineError(`could not forward the engine port for ${udid} (adb forward / iproxy failed). Is the device connected?`);

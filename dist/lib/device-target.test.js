@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { detectPlatform, registerDriver, getDriver, registeredPlatforms, listAllTargets, _resetDrivers, } from "./device-target.js";
+import { detectPlatform, resolvePlatform, registerDriver, getDriver, registeredPlatforms, listAllTargets, _resetDrivers, } from "./device-target.js";
 function stubDriver(platform, targets, opts = {}) {
     return {
         platform,
@@ -75,5 +75,18 @@ describe("listAllTargets", () => {
         const all = await listAllTargets();
         expect(all).toHaveLength(1);
         expect(all[0].platform).toBe("ios-sim");
+    });
+});
+describe("resolvePlatform (authoritative via device list)", () => {
+    beforeEach(() => _resetDrivers());
+    it("trusts the driver-tagged platform over the format heuristic (real CoreDevice UUID)", async () => {
+        // A real iPhone 12 Pro Max reports a UUID indistinguishable from a sim UDID.
+        const realUdid = "E4EFAC0A-3C30-5424-9217-309584C18D2C";
+        registerDriver(stubDriver("ios-real", [{ udid: realUdid, platform: "ios-real" }]));
+        expect(detectPlatform(realUdid)).toBe("ios-sim"); // heuristic is wrong here…
+        expect(await resolvePlatform(realUdid)).toBe("ios-real"); // …authoritative is correct
+    });
+    it("falls back to the heuristic when the device is not listed", async () => {
+        expect(await resolvePlatform("emulator-5554")).toBe("android");
     });
 });

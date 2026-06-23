@@ -14,7 +14,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { errorResult, okResult } from "../lib/result.js";
-import { detectPlatform } from "../lib/device-target.js";
+import { resolvePlatform } from "../lib/device-target.js";
 import {
   EngineClient,
   EngineError,
@@ -41,7 +41,7 @@ const INSTRUMENT_NOTE =
 const BY = z.enum(["name", "path", "component", "text", "id"]);
 
 async function connectEngine(udid: string): Promise<EngineClient> {
-  const platform = detectPlatform(udid);
+  const platform = await resolvePlatform(udid);
   const forwarded = await forwardEnginePort(platform, udid);
   if (!forwarded) {
     throw new EngineError(
