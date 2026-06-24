@@ -56,12 +56,17 @@ describe("getBackendFor (per-target backend seam)", () => {
         process.env.PODIUM_DISABLE_NATIVE = "1";
     });
     afterEach(() => {
+        vi.restoreAllMocks();
         if (prev === undefined)
             delete process.env.PODIUM_DISABLE_NATIVE;
         else
             process.env.PODIUM_DISABLE_NATIVE = prev;
     });
-    it("returns null for android (adb backend lands in A2)", async () => {
+    it("android: returns the adb backend when adb is present, null when absent", async () => {
+        const adb = vi.spyOn(exec, "commandExists");
+        adb.mockResolvedValue(true);
+        expect((await getBackendFor("android"))?.name).toBe("adb");
+        adb.mockResolvedValue(false);
         expect(await getBackendFor("android")).toBeNull();
     });
     it("delegates ios-sim to getBackend (null when native is disabled)", async () => {
