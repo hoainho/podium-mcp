@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - 2026-06-23
+## [0.3.0] - 2026-06-24
 
 ### Added
 
@@ -20,10 +20,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   backend (`input tap/swipe/text/keyevent`, `uiautomator dump` → accessibility
   elements). `tap_on`/`swipe`/`input_text`/`inspect_screen` now work on Android.
 - **Real iOS device** — a `devicectl`-based lifecycle driver
-  (list/install/launch) and an opt-in WebDriverAgent gesture/inspect backend
-  (`PODIUM_WDA_URL`; `/source` accessibility tree + tap/swipe/keys). Missing
-  real-device prerequisites (signing, iOS-17 RSD tunnel) fail closed with
-  guidance.
+  (list/install/launch; the iOS-17+ RSD tunnel is auto-mounted by `devicectl`,
+  verified live on an iPhone 12 Pro Max) and an opt-in WebDriverAgent
+  gesture/inspect backend (`PODIUM_WDA_URL`; `/source` accessibility tree +
+  tap/swipe/keys). Missing prerequisites (signing, a paired/unlocked device,
+  WDA) fail closed with guidance.
 
 ### Changed
 
@@ -33,10 +34,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   iOS-sim path is unchanged. `resolvePlatform()` derives a device's platform from
   the live device list (a real CoreDevice iPhone UUID is indistinguishable from a
   sim UDID by format — verified on an iPhone 12 Pro Max).
-- **Platform-aware capture** — `screenshot` and `record_start`/`record_stop` now
+- **Platform-aware capture** — `screenshot` and `record_start`/`record_stop`
   route by platform: iOS-sim (`simctl`), Android (`adb` screencap/pull and
-  `screenrecord`+pull), real iOS (`idb` screenshot / `idb record-video`). Real-iOS
-  capture fails closed with install guidance when `idb_companion` is absent.
+  `screenrecord`+pull), real iOS (screenshot tries `idb`, then falls back to
+  `idevicescreenshot`; video via `idb record-video`). Real-iOS capture fails
+  closed with install guidance when no capture backend is present. Note: on
+  Apple-Silicon + iOS 17+ with an older Xcode, no CLI capture backend may be
+  installable (the device speaks only Apple's CoreDevice tunnel) — see
+  `docs/real-device-ios-runbook.md`.
 
 > Real-device (Android/iOS) and engine paths land code-complete with
 > unit/integration coverage. Live end-to-end on a real emulator/device and an

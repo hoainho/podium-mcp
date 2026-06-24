@@ -11,7 +11,7 @@ A single MCP stdio endpoint with **47 tools** for **iOS (simulator + real) and A
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7C3AED)](https://modelcontextprotocol.io)
 [![Tools](https://img.shields.io/badge/tools-47-7C3AED.svg)](#the-47-tools)
-[![Tests](https://img.shields.io/badge/tests-260%20passing-brightgreen.svg)](#development--testing)
+[![Tests](https://img.shields.io/badge/tests-269%20passing-brightgreen.svg)](#development--testing)
 [![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
 [![mcp.so](https://img.shields.io/badge/mcp.so-listed-7C3AED)](https://mcp.so/server/io.github.hoainho/podium-mcp)
 
@@ -41,7 +41,7 @@ Rather than wiring several MCP servers into every client config, `podium-mcp` ex
 ## What's new in v0.3.0
 
 - **Android (emulator + real)** — an `adb` platform driver + gesture/inspect backend; `tap_on` / `swipe` / `input_text` / `inspect_screen` now work on Android, with the view hierarchy from `uiautomator dump`.
-- **Real iOS device** — a `devicectl` lifecycle driver and an opt-in **WebDriverAgent** backend (`PODIUM_WDA_URL`); missing signing / iOS-17 tunnel prerequisites fail closed with guidance. See [`docs/real-device-ios-runbook.md`](docs/real-device-ios-runbook.md).
+- **Real iOS device** — a `devicectl` lifecycle driver (the iOS-17+ RSD tunnel is auto-mounted by `devicectl`) and an opt-in **WebDriverAgent** backend (`PODIUM_WDA_URL`); missing signing / device / WDA prerequisites fail closed with guidance. Platform-aware capture (`screenshot` via `idb` → `idevicescreenshot`) is toolchain-gated — see [`docs/real-device-ios-runbook.md`](docs/real-device-ios-runbook.md).
 - **No-vision game-engine automation** — `engine_inspect` / `engine_tap` / `engine_swipe` / `engine_call` address Unity/GL objects by name/path/component with screen coordinates (never screenshots), via an **AltTester** bridge or a **WebGL-in-WebView** CDP bridge. Requires an instrumented build; fails closed otherwise. (tool count 43 → **47**)
 - **Multi-platform device model** — a `DeviceTarget { platform }` abstraction + `PlatformDriver` registry select the right backend per target; the iOS-sim path is unchanged.
 
@@ -99,7 +99,7 @@ podium-mcp collapses that into **one** server with:
 - *(optional)* a running **Metro** bundler for the `metro_*` debugging tools
 - *(optional)* Android SDK + `adb` — adb paths are **detection-only** and degrade gracefully when absent
 
-> **Platform scope:** podium's automation targets the **iOS Simulator**. Android devices are *detected* (`device_list`, `podium_health`) but not yet automatable — every adb-backed path returns an informative result instead of failing.
+> **Platform scope (v0.3.0):** podium automates **iOS simulators**, **real iPhones** (`devicectl` lifecycle + opt-in WebDriverAgent), and **Android** emulators/devices (`adb` gestures + `uiautomator` hierarchy). `device_list` tags each target with its platform and the backend is selected per target. When a toolchain (e.g. `adb`) is absent, those paths degrade to an informative result instead of failing.
 
 ## Install
 
@@ -156,7 +156,7 @@ Register the built server with any MCP client. **Claude Code** (`.mcp.json`):
 }
 ```
 
-Quick manual smoke test over raw stdio (lists the 43 registered tools):
+Quick manual smoke test over raw stdio (lists the 47 registered tools):
 
 ```bash
 printf '%s\n' \
@@ -324,7 +324,7 @@ For an RN shell that hosts its UI in a WebView, the app's API calls run in the w
 - **WebView tools are dev/QA only** — production App Store builds typically set `isInspectable = false`; tools return an actionable error and fall back to coordinate taps.
 - **WebView content-process memory is unreadable** from the app sandbox (platform limit) — use indirect signals (memory warnings, process terminations).
 - **Maestro `text:` matcher is full-string regex (IGNORE_CASE)** — partial strings don't match; copy hierarchy `text` verbatim or anchor with `.*`.
-- **Android is detection-only** — every adb path degrades to a structured "adb not found" result.
+- **Android requires `adb` on `PATH`** — gestures / inspect / screenshot work once `adb` is present; when it's absent every Android path degrades to a structured "adb not found" result.
 - **`orientation_get` is a screenshot-aspect heuristic** when no native backend is present — iOS simulators expose no direct orientation query.
 - **`record_start`/`record_stop` keep state in-process** — serialize `start` → … → `stop` on one connection; one active recording per udid (a watchdog finalizes one that's never stopped).
 
@@ -347,13 +347,21 @@ src/
     webview.ts      # mobilecli CDP — WebView list/inspect/eval/navigate/network
     metro.ts        # Metro CDP — app discovery, logs, network, state
     crash.ts        # DiagnosticReports crash listing/reading
-    recording.ts    # detached screen recording lifecycle + watchdog
+    recording.ts    # detached screen recording lifecycle + watchdog (platform-aware)
+    device-target.ts # DeviceTarget model + PlatformDriver registry (v0.3.0)
+    drivers/        # per-platform lifecycle: ios-sim, android, ios-real
+    adb.ts          # Android adb driver (list/install/launch/screenshot/wm size)
+    adb-backend.ts  # adb gesture/inspect (input + uiautomator → AX elements)
+    iosreal.ts      # real iOS via devicectl (list/install/launch) + capture
+    wda.ts          # opt-in WebDriverAgent backend (/source + tap/swipe/keys)
+    engine.ts       # no-vision engine client (AltTester + WebGL-in-WebView)
+    engine-transport.ts # WebSocket transport for the AltTester bridge
   tools/            # one file per group:
-                    #   health, device, screen, steps, flow,
-                    #   assert, validate, webview, debug
+                    #   health, device, screen, steps, flow, assert,
+                    #   validate, webview, debug, engine
 assets/             # bundled offline Maestro cheat sheet + demo.gif
 scripts/            # benchmark.ts, compare-mcps.ts
-e2e/                # real-simulator smoke suites (smoke / full-smoke / webview-network-live)
+e2e/                # smoke suites (smoke / full-smoke / webview-network-live / android-smoke / engine-smoke)
 docs/               # tool catalog, e2e transcript, roadmap
 ```
 
@@ -362,7 +370,7 @@ docs/               # tool catalog, e2e transcript, roadmap
 ```bash
 npm run build       # tsc
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run — 182 unit/integration tests (exec/network mocked, no sim needed)
+npm test            # vitest run — 269 unit/integration tests (exec/network mocked, no sim needed)
 npm run benchmark   # spawn a fresh server over stdio and sweep the tool suite
 node e2e/smoke.e2e.mjs        # real E2E against a booted simulator (macOS + Xcode)
 node e2e/full-smoke.e2e.mjs   # drives the iOS-sim tool handlers (happy + structured-error paths)
@@ -370,7 +378,7 @@ node e2e/android-smoke.e2e.mjs # Android emulator/device smoke (story A3)
 node e2e/engine-smoke.e2e.mjs  # AltTester engine smoke; skips without an instrumented build (story C4)
 ```
 
-**260 tests across 24 files, all passing** — including the v0.3.0 device-target registry, the Android `adb` driver + `uiautomator` parser, the AltTester engine client + WebGL bridge, the `devicectl`/WDA real-iOS parsers, plus the v0.2.0 oracle ladder, recording watchdog, gesture-parity, HAR export, WebView, and Metro paths.
+**269 tests across 24 files, all passing** — including the v0.3.0 device-target registry, the Android `adb` driver + `uiautomator` parser, the AltTester engine client + WebGL bridge, the `devicectl`/WDA real-iOS parsers, plus the v0.2.0 oracle ladder, recording watchdog, gesture-parity, HAR export, WebView, and Metro paths.
 
 Standards: TypeScript strict, **no `as any` / `@ts-ignore`**, **no shell execution** (all commands via `lib/exec.ts`), tools return structured errors instead of throwing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the "add a new tool" checklist.
 
