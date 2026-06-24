@@ -83,11 +83,23 @@ describe("iosRealDriver", () => {
     expect(r.error).toMatch(/idb_companion|libimobiledevice/);
   });
 
-  it("screenshot gives an actionable error when idb is present but fails (no companion)", async () => {
+  it("screenshot gives an actionable error when idb is present but fails (no companion, no fallback)", async () => {
     vi.spyOn(exec, "commandExists").mockImplementation(async (c: string) => c === "idb");
     vi.spyOn(exec, "run").mockResolvedValue({ code: 1, stdout: "", stderr: "Exception thrown in main\n  Traceback…" });
     const r = await iosRealDriver.screenshot("UDID", "/tmp/x.png");
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/idb_companion/);
+  });
+
+  it("screenshot falls through to idevicescreenshot when idb is present but fails", async () => {
+    vi.spyOn(exec, "commandExists").mockResolvedValue(true); // both idb and idevicescreenshot present
+    const spy = vi
+      .spyOn(exec, "run")
+      .mockResolvedValueOnce({ code: 1, stdout: "", stderr: "idb error (no companion)" }) // idb fails
+      .mockResolvedValueOnce({ code: 0, stdout: "", stderr: "" }); // idevicescreenshot succeeds
+    const r = await iosRealDriver.screenshot("UDID", "/tmp/x.png");
+    expect(r.ok).toBe(true);
+    expect(spy.mock.calls[0][0]).toBe("idb");
+    expect(spy.mock.calls[1][0]).toBe("idevicescreenshot");
   });
 });

@@ -54,6 +54,15 @@ identity + a physically paired device), so v0.3.0 ships the iOS-real driver
   `idb screenshot out.png`.
 - **libimobiledevice**: `brew install libimobiledevice`, then `idevicescreenshot out.png`.
 
+> ⚠️ **Known limitation (verified — Apple Silicon + iOS 17+ with Xcode 16.4):** neither
+> CLI worked on this setup. `idb-companion` refused to install (its Homebrew formula
+> requires a much newer Xcode), and `libimobiledevice` could not see the device
+> (`idevice_id -l` was empty) — the iPhone connects over Apple's **CoreDevice tunnel**,
+> which `usbmuxd`/`idevice_id` don't expose. `devicectl` *does* use that tunnel
+> (enumerate/install/launch verified) but has no screenshot/record command. On such a
+> setup, use **QuickTime** or **on-device Screen Recording** (below); the CLI paths work
+> once `idb_companion` is installable (update Xcode).
+
 ### Video recording — choose ONE:
 - **QuickTime Player** (most reliable, GUI): File → **New Movie Recording** → click the
   arrow next to the Record button → select the **iPhone** → it shows the device *screen*

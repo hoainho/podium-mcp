@@ -102,20 +102,25 @@ export const iosRealDriver: PlatformDriver = {
     error: `terminating ${bundleId} on a real iOS device ${WDA_NOTE}; devicectl has no stable terminate-by-bundle.`,
   }),
   screenshot: async (udid, outPath) => {
-    // A real device screenshots via idb (needs idb_companion) or libimobiledevice;
-    // devicectl has no screenshot. Fail closed with install guidance when neither.
-    if (await commandExists("idb")) {
+    // A real device screenshots via idb (needs idb_companion) or libimobiledevice's
+    // idevicescreenshot; devicectl has no screenshot. Prefer idb, but FALL THROUGH to
+    // idevicescreenshot when idb is present-but-broken (e.g. companion missing —
+    // verified on an iPhone 12 Pro Max where idb errored). Fail closed otherwise.
+    const hasIdb = await commandExists("idb");
+    const hasIdevicescreenshot = await commandExists("idevicescreenshot");
+    if (hasIdb) {
       const r = await run("idb", ["screenshot", outPath, "--udid", udid], { timeout: 30_000 });
       if (r.code === 0) return toResult(r);
-      // idb is installed but failed at runtime — almost always a missing/unstarted
-      // idb_companion. Surface that, not the raw Python traceback (verified on device).
-      return {
-        ok: false,
-        code: r.code,
-        error: `idb screenshot failed — ensure idb_companion is installed and the device is connected (brew install facebook/fb/idb-companion): ${(r.stderr || "").split("\n")[0]}`,
-      };
+      if (!hasIdevicescreenshot) {
+        return {
+          ok: false,
+          code: r.code,
+          error: `idb screenshot failed — ensure idb_companion is installed and the device is connected (brew install facebook/fb/idb-companion): ${(r.stderr || "").split("\n")[0]}`,
+        };
+      }
+      // idb failed but idevicescreenshot is available — try it below.
     }
-    if (await commandExists("idevicescreenshot")) {
+    if (hasIdevicescreenshot) {
       const r = await run("idevicescreenshot", ["-u", udid, outPath], { timeout: 30_000 });
       if (r.code === 0) return toResult(r);
       return { ok: false, code: r.code, error: `idevicescreenshot failed: ${(r.stderr || "").split("\n")[0]}` };
@@ -123,7 +128,7 @@ export const iosRealDriver: PlatformDriver = {
     return {
       ok: false,
       error:
-        "real-iOS screenshot needs idb (brew install facebook/fb/idb-companion) or libimobiledevice (brew install libimobiledevice)",
+        "real-iOS screenshot needs idb_companion (brew install facebook/fb/idb-companion) or libimobiledevice (brew install libimobiledevice)",
     };
   },
   screenSize: async () => null, // provided via WDA (story B2)
