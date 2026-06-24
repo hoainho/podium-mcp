@@ -15,7 +15,9 @@ on:
 
 jobs:
   publish-registry:
-    runs-on: ubuntu-latest
+    # podium is macOS-only; the unit suite includes simctl/xcrun-backed tests
+    # that only pass on macOS — matches ci.yml and the npm publish gate.
+    runs-on: macos-latest
     permissions:
       contents: read
       id-token: write # GitHub OIDC → registry auth for io.github.* namespace

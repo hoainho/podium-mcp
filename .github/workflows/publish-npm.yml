@@ -12,7 +12,9 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    # podium is macOS-only; the unit suite includes simctl/xcrun-backed tests
+    # (real recording spawn, toolchain probe) that only pass on macOS — matches ci.yml.
+    runs-on: macos-latest
     permissions:
       contents: read
     steps:
