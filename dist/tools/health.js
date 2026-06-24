@@ -1,12 +1,13 @@
 import { commandExists } from "../lib/exec.js";
 import { getBackend, resolveMobilecli } from "../lib/native.js";
 const TOOL_NAME = "podium_health";
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const NAME = "podium-mcp";
 export function registerHealthTool(server) {
     server.tool(TOOL_NAME, "Returns health status of the podium-mcp server and toolchain availability. " +
-        "Scope: podium's automation tools target iOS simulators (macOS + Xcode). adb is detected " +
-        "for visibility but Android devices are not yet automatable.", {}, async () => {
+        "Scope: iOS (simulator + real device), Android (emulator + real via adb), and game-engine " +
+        "(Unity/GL via AltTester) automation. macOS + Xcode required; adb for Android, an instrumented " +
+        "build for engine tools.", {}, async () => {
         const [xcrun, maestro, adb, idb, mobilecli, backend] = await Promise.all([
             commandExists("xcrun"),
             commandExists("maestro"),
@@ -18,7 +19,7 @@ export function registerHealthTool(server) {
         const payload = {
             name: NAME,
             version: VERSION,
-            platform: "ios-simulator",
+            platforms: ["ios-sim", "ios-real", "android"],
             toolchain: { xcrun, maestro, adb, idb, mobilecli },
             gestureBackend: backend
                 ? `${backend.name} (native)`

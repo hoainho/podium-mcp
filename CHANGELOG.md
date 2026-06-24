@@ -4,6 +4,50 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-24
+
+### Added
+
+- **Game-engine automation, no vision** (tool count 43 → **47**) —
+  `engine_inspect` / `engine_tap` / `engine_swipe` / `engine_call` drive
+  Unity/WebGL/GL UIs as addressable objects (by name/path/component) with
+  engine-reported screen coordinates, via an AltTester bridge (native, over a
+  forwarded port) or a WebGL-in-WebView CDP bridge (`window.__podiumEngine`).
+  Requires an AltTester-instrumented build; otherwise fails closed with an
+  actionable error — never a vision fallback.
+- **Android (emulator + real)** — an `adb` platform driver
+  (list/install/launch/screenshot/`wm size`) and an `adb` gesture/inspect
+  backend (`input tap/swipe/text/keyevent`, `uiautomator dump` → accessibility
+  elements). `tap_on`/`swipe`/`input_text`/`inspect_screen` now work on Android.
+- **Real iOS device** — a `devicectl`-based lifecycle driver
+  (list/install/launch; the iOS-17+ RSD tunnel is auto-mounted by `devicectl`,
+  verified live on an iPhone 12 Pro Max) and an opt-in WebDriverAgent
+  gesture/inspect backend (`PODIUM_WDA_URL`; `/source` accessibility tree +
+  tap/swipe/keys). Missing prerequisites (signing, a paired/unlocked device,
+  WDA) fail closed with guidance.
+
+### Changed
+
+- **Multi-platform device abstraction** — a `DeviceTarget { platform }` model
+  and a `PlatformDriver` registry replace the iOS-Simulator-only assumption; the
+  gesture/inspect backend is selected per target (`getBackendFor`). The existing
+  iOS-sim path is unchanged. `resolvePlatform()` derives a device's platform from
+  the live device list (a real CoreDevice iPhone UUID is indistinguishable from a
+  sim UDID by format — verified on an iPhone 12 Pro Max).
+- **Platform-aware capture** — `screenshot` and `record_start`/`record_stop`
+  route by platform: iOS-sim (`simctl`), Android (`adb` screencap/pull and
+  `screenrecord`+pull), real iOS (screenshot tries `idb`, then falls back to
+  `idevicescreenshot`; video via `idb record-video`). Real-iOS capture fails
+  closed with install guidance when no capture backend is present. Note: on
+  Apple-Silicon + iOS 17+ with an older Xcode, no CLI capture backend may be
+  installable (the device speaks only Apple's CoreDevice tunnel) — see
+  `docs/real-device-ios-runbook.md`.
+
+> Real-device (Android/iOS) and engine paths land code-complete with
+> unit/integration coverage. Live end-to-end on a real emulator/device and an
+> AltTester-instrumented Unity sample are tracked for a hardware-equipped CI
+> (roadmap stories A3 / B3 / C4).
+
 ## [0.2.0] - 2026-06-17
 
 ### Added
@@ -105,5 +149,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Docs: `README.md`, `docs/tool-catalog.md`, `docs/e2e-demo.md`.
 - 66 unit tests (vitest); TypeScript strict; no type suppression.
 
+[0.3.0]: https://github.com/hoainho/podium-mcp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/hoainho/podium-mcp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/hoainho/podium-mcp/releases/tag/v0.1.0

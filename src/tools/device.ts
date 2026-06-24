@@ -20,6 +20,9 @@ import {
 } from "../lib/simctl.js";
 import { startRecording, stopRecording } from "../lib/recording.js";
 import { getBackend } from "../lib/native.js";
+import { parseAdbDevices } from "../lib/adb.js";
+import { resolvePlatform, getDriver } from "../lib/device-target.js";
+import type { DriverResult } from "../lib/device-target.js";
 
 import { errorResult, okResult } from "../lib/result.js";
 
@@ -48,24 +51,16 @@ export function registerDeviceTools(server: McpServer): void {
       if (!adbPresent) {
         androidSection = { available: false, reason: "adb not found" };
       } else {
-        const adbResult = await run("adb", ["devices"]);
+        const adbResult = await run("adb", ["devices", "-l"]);
         if (adbResult.code !== 0) {
           androidSection = { available: false, reason: adbResult.stderr || adbResult.stdout };
         } else {
-          const lines = adbResult.stdout
-            .split("\n")
-            .slice(1)
-            .map((l) => l.trim())
-            .filter((l) => l.length > 0);
-          const devices = lines.map((l) => {
-            const [serial, status] = l.split(/\s+/);
-            return { serial, status };
-          });
-          androidSection = { available: true, devices };
+          androidSection = { available: true, devices: parseAdbDevices(adbResult.stdout) };
         }
       }
 
-      return okResult({ ios: iosResult.devices, android: androidSection });
+      const ios = iosResult.devices.map((d) => ({ ...d, platform: "ios-sim" as const }));
+      return okResult({ ios, android: androidSection });
     }
   );
 
@@ -155,9 +150,19 @@ export function registerDeviceTools(server: McpServer): void {
     async ({ udid, saveTo }) => {
       const outPath =
         saveTo ?? path.join(os.tmpdir(), `podium-screenshot-${Date.now()}.png`);
-      const result = await screenshot(udid, outPath);
+      // Route by platform: ios-sim → simctl, android → adb screencap+pull,
+      // ios-real → idb/idevicescreenshot. Falls back to simctl when no driver is
+      // registered (preserves the legacy iOS-sim path for callers/tests).
+      const platform = await resolvePlatform(udid);
+      const driver = getDriver(platform);
+      const result: DriverResult = driver
+        ? await driver.screenshot(udid, outPath)
+        : await screenshot(udid, outPath);
       if (!result.ok) {
-        return errorResult(`screenshot failed (code ${result.code}): ${result.stderr || result.stdout}`);
+        const detail = result.error ?? result.stderr ?? result.stdout ?? "unknown error";
+        return errorResult(
+          `screenshot failed${result.code != null ? ` (code ${result.code})` : ""}: ${detail}`
+        );
       }
       let byteSize: number | null = null;
       try {
@@ -166,7 +171,7 @@ export function registerDeviceTools(server: McpServer): void {
       } catch {
         // non-fatal — file stat failure doesn't invalidate the screenshot
       }
-      return okResult({ ok: true, udid, path: outPath, byteSize });
+      return okResult({ ok: true, udid, platform, path: outPath, byteSize });
     }
   );
 

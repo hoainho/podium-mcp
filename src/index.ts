@@ -10,12 +10,17 @@ import { registerDebugTools } from "./tools/debug.js";
 import { registerWebviewTools } from "./tools/webview.js";
 import { registerAssertTools } from "./tools/assert.js";
 import { registerValidateTools } from "./tools/validate.js";
+import { registerEngineTools } from "./tools/engine.js";
 import { prefetchDevices } from "./lib/simctl.js";
 import { getBackend } from "./lib/native.js";
+import { registerDriver } from "./lib/device-target.js";
+import { iosSimDriver } from "./lib/drivers/ios-sim.js";
+import { androidDriver } from "./lib/adb.js";
+import { iosRealDriver } from "./lib/iosreal.js";
 
 const server = new McpServer({
   name: "podium",
-  version: "0.2.0",
+  version: "0.3.0",
 });
 
 registerHealthTool(server);
@@ -27,6 +32,13 @@ registerDebugTools(server);
 registerWebviewTools(server);
 registerAssertTools(server);
 registerValidateTools(server);
+registerEngineTools(server);
+
+// Register platform drivers (v0.3.0): ios-sim wraps simctl. The android and
+// ios-real drivers register here as they land.
+registerDriver(iosSimDriver);
+registerDriver(androidDriver);
+registerDriver(iosRealDriver);
 
 // Fire-and-forget warm-ups: device-list cache + native-backend probe.
 // Neither blocks connect; the first tool calls hit warm state instead.

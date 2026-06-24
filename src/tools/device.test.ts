@@ -383,6 +383,27 @@ describe("device tools via fake server", () => {
   });
 });
 
+describe("recordingCommand (per-platform recorder)", () => {
+  it("ios-sim → simctl recordVideo (host file)", () => {
+    expect(recording.recordingCommand("ios-sim", "U", "/tmp/a.mp4", "/sdcard/x.mp4")).toEqual({
+      cmd: "xcrun",
+      args: ["simctl", "io", "U", "recordVideo", "--codec=h264", "--force", "/tmp/a.mp4"],
+    });
+  });
+  it("ios-real → idb record-video (host file)", () => {
+    expect(recording.recordingCommand("ios-real", "U", "/tmp/a.mp4", "/sdcard/x.mp4")).toEqual({
+      cmd: "idb",
+      args: ["record-video", "/tmp/a.mp4", "--udid", "U"],
+    });
+  });
+  it("android → adb screenrecord (on-device file)", () => {
+    expect(recording.recordingCommand("android", "U", "/tmp/a.mp4", "/sdcard/x.mp4")).toEqual({
+      cmd: "adb",
+      args: ["-s", "U", "shell", "screenrecord", "/sdcard/x.mp4"],
+    });
+  });
+});
+
 // ─── recording module tests ───────────────────────────────────────────────────
 // ESM native modules (node:child_process) can't be spied on at runtime.
 // We test the registry guard by calling startRecording/stopRecording directly.
@@ -390,7 +411,7 @@ describe("device tools via fake server", () => {
 
 describe("recording module", () => {
   it("startRecording returns ok:true and a pid on first call", async () => {
-    const udid = `recording-basic-${Date.now()}`;
+    const udid = `11111111-1111-1111-1111-${Date.now().toString().slice(-12)}`;
     const savePath = `/tmp/podium-basic-${Date.now()}.mp4`;
 
     const first = await recording.startRecording(udid, savePath);
@@ -403,7 +424,7 @@ describe("recording module", () => {
   }, 15_000);
 
   it("second startRecording for same udid returns 'already active' without spawning again", async () => {
-    const udid = `recording-guard-${Date.now()}`;
+    const udid = `22222222-2222-2222-2222-${Date.now().toString().slice(-12)}`;
     const savePath = `/tmp/podium-guard-${Date.now()}.mp4`;
 
     const first = await recording.startRecording(udid, savePath);
@@ -423,7 +444,7 @@ describe("recording module", () => {
   it("auto-stops the recording after PODIUM_MAX_RECORDING_MS (watchdog)", async () => {
     const prev = process.env.PODIUM_MAX_RECORDING_MS;
     process.env.PODIUM_MAX_RECORDING_MS = "300";
-    const udid = `recording-watchdog-${Date.now()}`;
+    const udid = `33333333-3333-3333-3333-${Date.now().toString().slice(-12)}`;
     const savePath = `/tmp/podium-watchdog-${Date.now()}.mp4`;
     try {
       const r = await recording.startRecording(udid, savePath);
@@ -451,7 +472,7 @@ describe("recording module", () => {
       fake as unknown as import("@modelcontextprotocol/sdk/server/mcp.js").McpServer
     );
     const handler = fake._handlers.get("record_start")!;
-    const udid = `recording-defpath-${Date.now()}`;
+    const udid = `44444444-4444-4444-4444-${Date.now().toString().slice(-12)}`;
 
     const r1 = await handler({ udid });
     const p1 = (JSON.parse(r1.content[0].text) as { path: string }).path;

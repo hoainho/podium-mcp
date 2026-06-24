@@ -12,11 +12,12 @@
  */
 import { run } from "./exec.js";
 import { getBackend, findElements, elementCenter } from "./native.js";
+import type { NativeBackend } from "./native.js";
 import { runMaestroFlow } from "./maestro.js";
 
 export interface NativeTapResult {
   ok: boolean;
-  backend: "idb" | "mobilecli" | "maestro";
+  backend: NativeBackend["name"] | "maestro";
   detail: string;
 }
 

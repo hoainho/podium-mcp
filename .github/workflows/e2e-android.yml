@@ -1,0 +1,41 @@
+name: E2E (Android emulator)
+
+# Real end-to-end smoke against a booted Android emulator (roadmap story A3).
+# Nightly + manual only — NOT a PR gate (emulator runs are slow/flaky-prone).
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "30 3 * * *" # 03:30 UTC nightly
+
+jobs:
+  android-e2e:
+    # Hardware-accelerated emulators need a runner that exposes /dev/kvm.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run build
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run Android smoke e2e on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          script: node e2e/android-smoke.e2e.mjs
+      - name: Upload screenshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-e2e-screenshots
+          path: ${{ runner.temp }}/podium-android-e2e-*/**/*.png
+          if-no-files-found: ignore

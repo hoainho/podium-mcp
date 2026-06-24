@@ -7,6 +7,8 @@ import { run } from "../lib/exec.js";
 import { listDevicesCached, boot, install, launch, terminate, screenshot, openUrl, setLocation, listApps, uninstall, measureScreen, } from "../lib/simctl.js";
 import { startRecording, stopRecording } from "../lib/recording.js";
 import { getBackend } from "../lib/native.js";
+import { parseAdbDevices } from "../lib/adb.js";
+import { resolvePlatform, getDriver } from "../lib/device-target.js";
 import { errorResult, okResult } from "../lib/result.js";
 /** adb presence rarely changes mid-session — probe once. */
 let adbPresentCache;
@@ -27,24 +29,16 @@ export function registerDeviceTools(server) {
             androidSection = { available: false, reason: "adb not found" };
         }
         else {
-            const adbResult = await run("adb", ["devices"]);
+            const adbResult = await run("adb", ["devices", "-l"]);
             if (adbResult.code !== 0) {
                 androidSection = { available: false, reason: adbResult.stderr || adbResult.stdout };
             }
             else {
-                const lines = adbResult.stdout
-                    .split("\n")
-                    .slice(1)
-                    .map((l) => l.trim())
-                    .filter((l) => l.length > 0);
-                const devices = lines.map((l) => {
-                    const [serial, status] = l.split(/\s+/);
-                    return { serial, status };
-                });
-                androidSection = { available: true, devices };
+                androidSection = { available: true, devices: parseAdbDevices(adbResult.stdout) };
             }
         }
-        return okResult({ ios: iosResult.devices, android: androidSection });
+        const ios = iosResult.devices.map((d) => ({ ...d, platform: "ios-sim" }));
+        return okResult({ ios, android: androidSection });
     });
     // ─── device_boot ────────────────────────────────────────────────────────────
     server.tool("device_boot", "Boots an iOS simulator by UDID. Waits up to 30 seconds for the boot command to complete. Idempotent: booting an already-booted device returns ok with alreadyBooted:true.", { udid: z.string().describe("Simulator UDID (from device_list)") }, async ({ udid }) => {
@@ -103,9 +97,17 @@ export function registerDeviceTools(server) {
             .describe("Destination file path (must end .png or .jpg). Defaults to a tmp file."),
     }, async ({ udid, saveTo }) => {
         const outPath = saveTo ?? path.join(os.tmpdir(), `podium-screenshot-${Date.now()}.png`);
-        const result = await screenshot(udid, outPath);
+        // Route by platform: ios-sim → simctl, android → adb screencap+pull,
+        // ios-real → idb/idevicescreenshot. Falls back to simctl when no driver is
+        // registered (preserves the legacy iOS-sim path for callers/tests).
+        const platform = await resolvePlatform(udid);
+        const driver = getDriver(platform);
+        const result = driver
+            ? await driver.screenshot(udid, outPath)
+            : await screenshot(udid, outPath);
         if (!result.ok) {
-            return errorResult(`screenshot failed (code ${result.code}): ${result.stderr || result.stdout}`);
+            const detail = result.error ?? result.stderr ?? result.stdout ?? "unknown error";
+            return errorResult(`screenshot failed${result.code != null ? ` (code ${result.code})` : ""}: ${detail}`);
         }
         let byteSize = null;
         try {
@@ -115,7 +117,7 @@ export function registerDeviceTools(server) {
         catch {
             // non-fatal — file stat failure doesn't invalidate the screenshot
         }
-        return okResult({ ok: true, udid, path: outPath, byteSize });
+        return okResult({ ok: true, udid, platform, path: outPath, byteSize });
     });
     // ─── open_url ────────────────────────────────────────────────────────────────
     server.tool("open_url", "Opens a URL on an iOS simulator (deep-links, https:// etc.).", {
