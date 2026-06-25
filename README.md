@@ -4,16 +4,22 @@
 
 **One baton. Every instrument.**
 
-A single MCP stdio endpoint with **51 tools** for **iOS (simulator + real) and Android** device control, native UI automation, end-to-end flows, trustworthy assertions, React Native debugging, **WebView DOM + network inspection**, **no-vision Unity/WebGL/GL game-engine automation**, and a **no-vision canvas brain** (Pixi/Konva/Fabric/Phaser/Three/Babylon) — one connection instead of half a dozen servers.
+A single MCP stdio endpoint with **51 tools** for **iOS (simulator + real) and Android** device control, native UI automation, end-to-end flows, trustworthy assertions, React Native debugging, **WebView DOM + network inspection**, and a **no-vision canvas/WebGL brain** for Pixi/Konva/Fabric/Phaser/Three/Babylon (validated live in WebKit) — plus an **experimental** engine bridge for instrumented Unity/GL builds (AltTester) — one connection instead of half a dozen servers.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
-[![MCP](https://img.shields.io/badge/MCP-stdio-7C3AED)](https://modelcontextprotocol.io)
-[![Tools](https://img.shields.io/badge/tools-51-7C3AED.svg)](#the-51-tools)
-[![Tests](https://img.shields.io/badge/tests-359%20passing-brightgreen.svg)](#development--testing)
-[![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/podium-mcp?logo=npm&color=CB3837)](https://www.npmjs.com/package/podium-mcp)
+[![Glama](https://glama.ai/mcp/servers/hoainho/podium-mcp/badge)](https://glama.ai/mcp/servers/hoainho/podium-mcp)
 [![mcp.so](https://img.shields.io/badge/mcp.so-listed-7C3AED)](https://mcp.so/server/io.github.hoainho/podium-mcp)
+[![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+[![tools 51](https://img.shields.io/badge/tools-51-7C3AED.svg)](#the-51-tools)
+[![tests 378](https://img.shields.io/badge/tests-378%20passing-brightgreen.svg)](#development--testing)
+[![tokens ~5x cheaper](https://img.shields.io/badge/tokens-~5x%20cheaper%20(no--vision)-2ea44f.svg)](#benchmarks)
+[![canvas 6 live engines](https://img.shields.io/badge/canvas-6%20live%20engines-2ea44f.svg)](#the-51-tools)
+[![Node ≥22](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
+[![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
+[![MCP stdio](https://img.shields.io/badge/MCP-stdio-7C3AED)](https://modelcontextprotocol.io)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-2ea44f.svg)](#roadmap--contributing)
 
 <br/>
 
@@ -34,39 +40,14 @@ A podium is where a maestro stands — one place to conduct the whole orchestra.
 - **WebView DOM + network** — resolve `WKWebView` DOM to tap coordinates, evaluate JS, drive navigation, and capture in-page HTTP traffic as JSON/HAR.
 - **React Native debugging** — Metro console logs, network requests, and in-app state over CDP, plus host/simulator crash reports.
 - **Real devices** — Android emulator/device via `adb` (gestures + `uiautomator` hierarchy); real iOS via `devicectl` lifecycle + an opt-in WebDriverAgent backend.
-- **Game-engine automation, no vision** — drive Unity/WebGL/GL objects by name/path/component with engine-reported screen coordinates, via AltTester (native) or a WebGL-in-WebView CDP bridge.
+- **Canvas & game-engine automation, no vision** — a *canvas/WebGL brain* drives Pixi/Konva/Fabric/Phaser/Three/Babylon UIs as addressable objects (validated live in WebKit). An **experimental** engine bridge drives Unity/GL via an **AltTester-instrumented** build (or a `window.__podiumEngine` WebGL bridge) — code-complete + mock-tested, not yet run against a live Unity build.
 
 Rather than wiring several MCP servers into every client config, `podium-mcp` exposes everything behind **one connection**, with a shared `execFile` layer (no shell), consistent structured errors, automatic retry around Maestro's iOS-driver flakiness, and a single health-check tool to confirm what's available on the host.
-
-## What's new in v0.4.0
-
-- **Canvas brain (no-vision)** — `canvas_inspect` / `canvas_resolve` / `canvas_tap` drive canvas/WebGL UIs (Pixi/Konva/Fabric/Phaser/Three/Babylon) as DOM-like elements with tap-ready coordinates. `canvas_resolve` maps a fuzzy intent ("close", "✕") to a ranked, **evidenced** target and **fails closed** on ties; `canvas_tap` resolves + taps it. NO screenshots. (tool count 47 → **51**)
-- **`/podium-mcp:canvas` skill** — one-command canvas agent: inspect → resolve → act.
-- **Token-savings report** — `podium_token_report` + `npm run token-bench` + [`docs/token-economics.md`](docs/token-economics.md) quantify no-vision vs screenshot/vision-loop tokens and the fixed per-request tool-def overhead.
-- **Opportunistic a11y + opt-in vision** — read a Flutter/ARIA fallback tree when present (free, no vision); vision is an opt-in, token-budgeted last resort (`PODIUM_ALLOW_VISION=1`, off by default).
-
-## What's new in v0.3.0
-
-- **Android (emulator + real)** — an `adb` platform driver + gesture/inspect backend; `tap_on` / `swipe` / `input_text` / `inspect_screen` now work on Android, with the view hierarchy from `uiautomator dump`.
-- **Real iOS device** — a `devicectl` lifecycle driver (the iOS-17+ RSD tunnel is auto-mounted by `devicectl`) and an opt-in **WebDriverAgent** backend (`PODIUM_WDA_URL`); missing signing / device / WDA prerequisites fail closed with guidance. Platform-aware capture (`screenshot` via `idb` → `idevicescreenshot`) is toolchain-gated — see [`docs/real-device-ios-runbook.md`](docs/real-device-ios-runbook.md).
-- **No-vision game-engine automation** — `engine_inspect` / `engine_tap` / `engine_swipe` / `engine_call` address Unity/GL objects by name/path/component with screen coordinates (never screenshots), via an **AltTester** bridge or a **WebGL-in-WebView** CDP bridge. Requires an instrumented build; fails closed otherwise. (tool count 43 → **47**)
-- **Multi-platform device model** — a `DeviceTarget { platform }` abstraction + `PlatformDriver` registry select the right backend per target; the iOS-sim path is unchanged.
-
-> Real-device and engine paths land code-complete with unit/integration coverage; live e2e on a real emulator/device and an AltTester-instrumented Unity sample run on hardware (see `e2e/android-smoke.e2e.mjs`, `e2e/engine-smoke.e2e.mjs`, and the iOS runbook).
-
-## What's new in v0.2.0
-
-- **Oracle ladder + trustworthy verdicts** — `assert_visible` / `assert_text` / `assert_not_visible` / `wait_for_element` and `validate_flow` verify state through WebView-DOM › native a11y › Maestro, returning **evidenced** results that fail closed instead of guessing "looks ok".
-- **Batch & export** — `run_steps` runs an ordered action batch in one call via the native backend; `export_flow` turns that batch into a reusable Maestro flow (the engineer→QA bridge).
-- **WebView network capture** — `webview_network` records in-WebView `fetch`/`XHR` traffic and exports redacted **JSON or HAR 1.2** (the network path `metro_network` can't see for WebView-hosted apps).
-- **Deeper RN introspection** — `metro_network` (CDP Network domain) and `metro_state` (read the in-app Redux store) join `metro_logs`.
-- **Native-first gesture backend** — `idb`/`mobilecli` cut `tap_on` ~14.7 s → ~0.6 s and `inspect_screen` ~8.9 s → ~0.9 s, with a Maestro fallback that preserves app state.
-- **Reliability hardening** — explicit per-command timeouts with a `timedOut` flag, timestamped recordings + a duration watchdog, native-backend re-probe TTL, exact bundle-id matching, and transparent iOS-simulator scope.
-- **Registry-ready** — `server.json` manifest + OIDC publish to the official MCP Registry, test-gated before every publish.
 
 ## Table of contents
 
 - [Why](#why)
+- [Benchmarks](#benchmarks)
 - [Requirements](#requirements)
 - [Install](#install)
 - [Usage](#usage)
@@ -78,6 +59,7 @@ Rather than wiring several MCP servers into every client config, `podium-mcp` ex
 - [Documented limits](#documented-limits-by-design-not-bugs)
 - [Architecture](#architecture)
 - [Development & testing](#development--testing)
+- [Roadmap & contributing](#roadmap--contributing)
 - [Releasing](#releasing)
 - [Prompt playbook & references](#prompt-playbook--references)
 - [Design ideas](#design-ideas)
@@ -95,6 +77,60 @@ podium-mcp collapses that into **one** server with:
 - automatic retry around Maestro's known iOS-driver flakiness,
 - graceful degradation when a toolchain (e.g. `adb`) is absent,
 - **evidenced verdicts** so an agent knows when a flow *actually* worked.
+
+## Benchmarks
+
+Podium is built on two choices that make it **fast** and **cheap**: it drives UIs
+as *structured data* — never screenshots — and routes gestures through a *native
+backend* with no per-action JVM spin-up.
+
+### Token economics — no-vision is ~5× cheaper
+
+A screenshot-driven agent sends an image to a vision model on **every step**.
+Podium returns a compact structured element list instead. On an equivalent 8-step
+mobile flow (1179×2556 screenshots vs ~20-element lists):
+
+| Approach | Per step | 8-step flow |
+| --- | ---: | ---: |
+| Screenshot / vision loop | ~2,070 tokens | **16,557 tokens** |
+| Podium — no-vision, structured | ~390 tokens | **3,117 tokens** |
+| **Savings** | **5.3×** | **−13,440 tokens (−81%)** |
+
+```
+vision loop  ████████████████████████████████  16,557 tokens
+Podium       ██████  3,117 tokens   (5.3× cheaper, −81%)
+```
+
+The gap **compounds with every step** — a 30-step session runs roughly **62k vs
+12k** input tokens. On top of per-step cost, the full **51-tool schema travels
+with every request (~3,612 tokens, ~71/tool)**; Podium keeps tool descriptions
+lean so the tool block never dominates the context window.
+
+For canvas / WebGL UIs the advantage is **structural**, not just cheaper:
+the [Canvas Brain](#the-51-tools) addresses objects by name and text, where a
+screenshot-only agent must re-analyze pixels on every frame.
+
+### Speed — native-first gesture backend
+
+Gestures route through `idb` / `mobilecli` instead of spinning up Maestro's JVM
+per action (measured on a live iPhone 16 Pro simulator):
+
+| Operation | Maestro (per-call JVM) | Podium native | Speedup |
+| --- | ---: | ---: | ---: |
+| `tap_on` | ~14.7 s | **~0.6 s** | **~24×** |
+| `inspect_screen` | ~8.9 s | **~0.9 s** | **~10×** |
+
+### One connection, not six
+
+All **51 tools** — device & app control, UI automation, declarative Maestro flows,
+evidenced assertions, WebView DOM + network capture, React Native / Metro
+debugging, and no-vision canvas/WebGL automation (plus an experimental engine bridge for instrumented Unity/GL) — sit behind a **single
+stdio endpoint**, replacing the usual stack of half a dozen separate MCP servers.
+
+> Token figures are heuristic estimates (~4 chars/token; Anthropic's ~750 px/token
+> image formula) — reproduce with `npm run token-bench`, or swap in the Anthropic
+> `count_tokens` API for exact counts. Speed figures were measured on a live
+> iPhone 16 Pro simulator (`npm run benchmark`).
 
 ## Requirements
 
@@ -191,7 +227,7 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 >
 > **Platform support (v0.3.0):** the gesture / inspect / lifecycle tools below run on **iOS simulators**, **real iPhones** (`devicectl` + opt-in WebDriverAgent via `PODIUM_WDA_URL`), and **Android** (emulator/device via `adb`; hierarchy from `uiautomator`). `device_list` tags each device with its platform and the backend is selected per target.
 
-### Game engine — Unity / WebGL / GL, no vision (4)
+### Game engine — Unity / GL via AltTester, no vision · experimental (4)
 
 | Tool | Key params | Backing engine | Behavior |
 |---|---|---|---|
@@ -200,7 +236,7 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 | `engine_swipe` | udid, fromX/Y, toX/Y, durationMs? | AltTester / CDP | Swipe inside the engine view |
 | `engine_call` | udid, by?, value, component, method, parameters? | AltTester / CDP | Invokes a C# component method by reflection (the engine analog of a DOM event handler) |
 
-> Engine tools require an **AltTester-instrumented build** (dev/staging) reachable on the forwarded port, or a `window.__podiumEngine` bridge for WebGL-in-WebView. On a non-instrumented build they **fail closed** with an actionable error — never a vision fallback.
+> **Status: experimental.** The wire shapes are unit-tested against mocks; the AltTester path has **not yet been validated against a live Unity build** (`engine-smoke` skips until an instrumented build is provided), and Unity-WebGL needs the app to expose `window.__podiumEngine`. Engine tools require an **AltTester-instrumented build** (dev/staging) or that WebGL bridge; on a non-instrumented build they **fail closed** with an actionable error — never a vision fallback. For canvas/WebGL apps using a JS framework, the **canvas brain below is the validated path**.
 
 ### Canvas brain — Pixi/Konva/Fabric/Phaser/Three/Babylon, no vision (3)
 
@@ -210,7 +246,7 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 | `canvas_resolve` | udid, intent, webviewId? | bridge + semantic resolver | Maps a fuzzy intent ("close", "✕") to a ranked, **evidenced** target; fail-closed `confidentEnough` |
 | `canvas_tap` | udid, intent, bundleId?, webviewId? | resolver + native tap | Resolves + taps the confident match at absolute screen coords (else fails closed) |
 
-> Canvas tools require an inspectable WKWebView hosting a supported framework with its root reachable (commonly on `window`, or Pixi's `__PIXI_APP__`). No framework / no inspectable WebView → **fails closed** with an actionable error — never a vision fallback. (Vision is a separate opt-in path, `PODIUM_ALLOW_VISION=1`.)
+> **Validated live:** all six frameworks pass a Playwright-WebKit (≈ WKWebView) suite at DPR 1 + 3 (`npm run test:canvas`, 19 tests). Canvas tools require an inspectable WKWebView hosting a supported framework with its root reachable (commonly on `window`, or Pixi's `__PIXI_APP__`). No framework / no inspectable WebView → **fails closed** with an actionable error — never a vision fallback. (Vision is a separate opt-in path, `PODIUM_ALLOW_VISION=1`.)
 
 ### Diagnostics (1)
 
@@ -344,7 +380,7 @@ For an RN shell that hosts its UI in a WebView, the app's API calls run in the w
 
 ## Documented limits (by design, not bugs)
 
-- **WebGL/Canvas content is un-automatable by selector** — no DOM/hierarchy; use `tap_with_fallback` with screenshot-derived coordinates.
+- **Canvas/WebGL needs a cooperating JS framework** — the canvas brain automates Pixi/Konva/Fabric/Phaser/Three/Babylon UIs by selector **when the app exposes its scene-graph root** (validated live). A raw/custom WebGL canvas, an opaque/production build, or **Unity without an AltTester / `window.__podiumEngine` bridge** is **not** selector-addressable — fall back to `tap_with_fallback` with screenshot-derived coordinates, or instrument the build.
 - **WebView tools are dev/QA only** — production App Store builds typically set `isInspectable = false`; tools return an actionable error and fall back to coordinate taps.
 - **WebView content-process memory is unreadable** from the app sandbox (platform limit) — use indirect signals (memory warnings, process terminations).
 - **Maestro `text:` matcher is full-string regex (IGNORE_CASE)** — partial strings don't match; copy hierarchy `text` verbatim or anchor with `.*`.
@@ -380,13 +416,20 @@ src/
     wda.ts          # opt-in WebDriverAgent backend (/source + tap/swipe/keys)
     engine.ts       # no-vision engine client (AltTester + WebGL-in-WebView)
     engine-transport.ts # WebSocket transport for the AltTester bridge
+    canvas-types.ts # Canvas Brain shared contract (CanvasObject, selectors)
+    canvas-adapters.ts  # in-page bridge: detect + walk Pixi/Konva/Fabric/Phaser/Three/Babylon
+    canvas-resolver.ts  # semantic "close brain": intent → ranked, evidenced target
+    canvas-a11y.ts  # Flutter/ARIA fallback tree → CanvasObject (opportunistic)
+    canvas-vision.ts # opt-in, token-budgeted vision fallback (off by default)
+    token-report.ts # token estimators + no-vision vs vision-loop comparison
   tools/            # one file per group:
-                    #   health, device, screen, steps, flow, assert,
-                    #   validate, webview, debug, engine
+                    #   health, device, screen, steps, flow, assert, validate,
+                    #   webview, debug, engine, canvas, token
 assets/             # bundled offline Maestro cheat sheet + demo.gif
-scripts/            # benchmark.ts, compare-mcps.ts
+scripts/            # benchmark.ts, compare-mcps.ts, token-bench.mjs
 e2e/                # smoke suites (smoke / full-smoke / webview-network-live / android-smoke / engine-smoke)
-docs/               # tool catalog, e2e transcript, roadmap
+test/canvas-e2e/    # live Playwright-WebKit canvas bridge suite (6 frameworks)
+docs/               # tool catalog, e2e transcript, roadmap, token-economics
 ```
 
 ## Development & testing
@@ -395,6 +438,7 @@ docs/               # tool catalog, e2e transcript, roadmap
 npm run build       # tsc
 npm run typecheck   # tsc --noEmit
 npm test            # vitest run — 359 unit/integration tests (exec/network mocked, no sim needed)
+npm run test:canvas # live canvas bridge suite in Playwright WebKit — 19 tests (run `npx playwright install webkit` first)
 npm run benchmark   # spawn a fresh server over stdio and sweep the tool suite
 node e2e/smoke.e2e.mjs        # real E2E against a booted simulator (macOS + Xcode)
 node e2e/full-smoke.e2e.mjs   # drives the iOS-sim tool handlers (happy + structured-error paths)
@@ -402,11 +446,28 @@ node e2e/android-smoke.e2e.mjs # Android emulator/device smoke (story A3)
 node e2e/engine-smoke.e2e.mjs  # AltTester engine smoke; skips without an instrumented build (story C4)
 ```
 
-**359 tests across 31 files, all passing** — including the v0.3.0 device-target registry, the Android `adb` driver + `uiautomator` parser, the AltTester engine client + WebGL bridge, the `devicectl`/WDA real-iOS parsers, plus the v0.2.0 oracle ladder, recording watchdog, gesture-parity, HAR export, WebView, and Metro paths.
+**359 unit/integration tests across 31 files, plus 19 live canvas-bridge tests (378 total), all passing** — including the v0.3.0 device-target registry, the Android `adb` driver + `uiautomator` parser, the AltTester engine client + WebGL bridge, the `devicectl`/WDA real-iOS parsers, plus the v0.2.0 oracle ladder, recording watchdog, gesture-parity, HAR export, WebView, and Metro paths.
 
 Standards: TypeScript strict, **no `as any` / `@ts-ignore`**, **no shell execution** (all commands via `lib/exec.ts`), tools return structured errors instead of throwing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the "add a new tool" checklist.
 
 **E2E on CI:** the [`E2E (simulator)`](.github/workflows/e2e-sim.yml) workflow boots a real iOS simulator on a macOS runner and runs the smoke suites nightly + on demand (not a PR gate — simulator runs are slow). `full-smoke.e2e.mjs` asserts the happy path where a target exists and the **real structured-error path** where a dependency is absent (a debug `isInspectable` app for WebView; a connected RN app for `metro_*`).
+
+## Roadmap & contributing
+
+podium-mcp is production-ready for **iOS/Android UI automation** and **no-vision canvas/WebGL** (Pixi/Konva/Fabric/Phaser/Three/Babylon — validated live). The frontier, where a contributor can make a real dent, lives in open issues:
+
+**High-impact** — [`help wanted`](https://github.com/hoainho/podium-mcp/labels/help%20wanted)
+- [#1](https://github.com/hoainho/podium-mcp/issues/1) — validate the AltTester/Unity engine path against a **live instrumented Unity build** (the biggest gap to real Unity automation).
+- [#2](https://github.com/hoainho/podium-mcp/issues/2) — **real-device WKWebView e2e** for the canvas brain (today validated in Playwright WebKit).
+- [#3](https://github.com/hoainho/podium-mcp/issues/3) — **Unity-WebGL adapter**: auto-detect + a drop-in `window.__podiumEngine` bridge.
+
+**Good first issues** — [`good first issue`](https://github.com/hoainho/podium-mcp/labels/good%20first%20issue)
+- [#4](https://github.com/hoainho/podium-mcp/issues/4) — more canvas adapters (PlayCanvas, Cocos Creator, p5.js).
+- [#5](https://github.com/hoainho/podium-mcp/issues/5) — expose `canvas_hittest` / `canvas_object_rect` tools.
+- [#7](https://github.com/hoainho/podium-mcp/issues/7) — exact token counts via the Anthropic `count_tokens` API.
+- [#6](https://github.com/hoainho/podium-mcp/issues/6) — address Konva Group/Container targets.
+
+Adding a tool follows one checklist in [CONTRIBUTING.md](CONTRIBUTING.md): TypeScript strict, no shell, structured-errors-never-throw, a vitest test, and a row in the [tool catalog](docs/tool-catalog.md). PRs welcome.
 
 ## Releasing
 
@@ -425,7 +486,7 @@ versions are immutable.
 
 ## Design ideas
 
-- **One podium, one connection.** A single server fronts every mobile capability so an agent configures one endpoint and discovers all 47 tools at once.
+- **One podium, one connection.** A single server fronts every mobile capability so an agent configures one endpoint and discovers all 51 tools at once.
 - **Safe by construction.** Every external command runs through an `execFile` layer with an explicit argument array — never a shell string.
 - **Never crash the conductor.** Tools return structured results and errors instead of throwing; one bad call can't take the server down.
 - **Degrade, don't fail.** A missing toolchain (e.g. Android's `adb`) yields an informative result rather than a hard error.
