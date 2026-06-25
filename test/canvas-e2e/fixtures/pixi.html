@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // PIXI is injected by the harness (UMD) before this runs. Build a scene
+      // with a known "close" button and expose the app on window so the bridge
+      // can find it. Ground truth: the close button's center in canvas-local CSS
+      // px is (760, 30) — a fixed placement independent of devicePixelRatio.
+      window.__setup = function () {
+        var app = new PIXI.Application({ width: 800, height: 600, backgroundAlpha: 0 });
+        document.body.appendChild(app.view);
+        var close = new PIXI.Graphics();
+        close.beginFill(0xff0000);
+        close.drawRect(0, 0, 40, 40);
+        close.endFill();
+        close.x = 740;
+        close.y = 10;
+        close.name = "closeBtn";
+        app.stage.addChild(close);
+        window.__PIXI_APP__ = app;
+        window.__expectedClose = { x: 760, y: 30 };
+      };
+    </script>
+  </body>
+</html>

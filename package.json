@@ -35,7 +35,8 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
     "benchmark": "npm run build && node --experimental-strip-types scripts/benchmark.ts",
-    "token-bench": "node scripts/token-bench.mjs"
+    "token-bench": "node scripts/token-bench.mjs",
+    "test:canvas": "vitest run --config vitest.canvas.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -44,6 +45,13 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.21",
+    "babylonjs": "^7.54.3",
+    "fabric": "^5.5.2",
+    "konva": "^9.3.22",
+    "phaser": "^3.90.0",
+    "pixi.js": "^7.4.3",
+    "playwright": "^1.61.1",
+    "three": "^0.149.0",
     "typescript": "^5.8.3",
     "vitest": "^3.2.2"
   },

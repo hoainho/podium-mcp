@@ -50,6 +50,17 @@ vision/OCR/object-detection backend; more framework adapters.
 ## Verification
 - Unit/integration: **359 tests across 31 files** (adapters, resolver, a11y,
   vision gating, token math, canvas tools with mocked eval/tap). CI on
-  `macos-latest`.
-- Live e2e (hardware/sample-gated): real Pixi/Konva/Three sample pages — the
-  in-page bridge can't execute in a headless unit run.
+  `macos-latest` (`.github/workflows/ci.yml`).
+- **Live bridge suite (DONE):** `npm run test:canvas` — Playwright **WebKit**
+  (≈ WKWebView) drives the real `buildCanvasBridgeScript()` against real
+  Pixi/Konva/Fabric/Phaser/Three/Babylon scene graphs, **19 tests at DPR 1 + 3**,
+  plus multi-canvas (largest-pick), bare-canvas (fail-closed), and 3D hit-test.
+  CI on `ubuntu-latest` (`.github/workflows/canvas-browser.yml`). This layer
+  found and fixed three bridge bugs: Konva `"*"` selector → `"Shape"`;
+  `makeScaler` was dividing already-CSS-logical 2D coords by DPR (now identity);
+  and 3D meshes now emit a projected screen-space bbox so hit-test/objectRect
+  work for Three/Babylon.
+- **Deferred (follow-up):** real-device WKWebView e2e (`canvas_inspect → resolve
+  → tap` on a sample WebView app on a booted simulator). Playwright-WebKit covers
+  most WKWebView fidelity hermetically; the on-device pass is a documented
+  residual-risk follow-up, not a release blocker for the bridge logic.

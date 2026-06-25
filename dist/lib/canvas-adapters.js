@@ -108,14 +108,16 @@ function resolveCanvas(hint) {
   return best;
 }
 
-// Backing-store px -> CSS px relative to canvas top-left. On a HiDPI canvas
-// canvas.width is DPR*cssWidth, so the scale below works out to ~1/DPR.
+// 2D framework bounds (Konva getClientRect, Fabric getBoundingRect, Pixi
+// getBounds, Phaser getBounds) are ALREADY in CSS-logical px relative to the
+// canvas — NOT backing-store px. So NO DPR scaling is applied (sx=sy=1). The
+// earlier scale (canvas.width/rect.width ≈ 1/DPR) was wrong and broke HiDPI: it
+// divided correct coords by the device pixel ratio. rect is still exposed for
+// the 3D adapters, which project NDC to px against the canvas CSS rect themselves.
 function makeScaler(canvas) {
   var rect = canvas ? canvas.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
-  var bw = canvas && canvas.width ? canvas.width : (rect.width || 1);
-  var bh = canvas && canvas.height ? canvas.height : (rect.height || 1);
-  var sx = (rect.width || bw) / (bw || 1);
-  var sy = (rect.height || bh) / (bh || 1);
+  var sx = 1;
+  var sy = 1;
   return {
     rect: rect,
     css: function (x, y) { return { x: x * sx, y: y * sy }; },
@@ -182,7 +184,7 @@ function inspectKonva() {
   var el = content && content.getElementsByTagName ? content.getElementsByTagName("canvas")[0] : null;
   var s = makeScaler(resolveCanvas(el));
   var out = [];
-  var nodes = stage.find("*") || [];
+  var nodes = stage.find("Shape") || [];
   for (var i = 0; i < nodes.length; i++) {
     var n = nodes[i], r = null;
     try { r = n.getClientRect(); } catch (e) { r = null; }
@@ -297,13 +299,40 @@ function inspectThree() {
       if (!finite(ndcX) || !finite(ndcY)) return;
       var cx = ((ndcX + 1) / 2) * (rect.width || 0);   // NDC (-1..1) -> CSS px
       var cy = ((1 - ndcY) / 2) * (rect.height || 0);
-      out.push({
+      // Screen-space AABB from the projected world bounding-box corners, so
+      // hitTest/objectRect work for 3D (the projected center lies within it).
+      var bbox3;
+      try {
+        if (THREE && THREE.Box3 && THREE.Vector3) {
+          var box = new THREE.Box3().setFromObject(n);
+          if (box && finite(box.min.x) && finite(box.max.x)) {
+            var bxs = [box.min.x, box.max.x], bys = [box.min.y, box.max.y], bzs = [box.min.z, box.max.z];
+            var bminX = Infinity, bminY = Infinity, bmaxX = -Infinity, bmaxY = -Infinity;
+            for (var ti = 0; ti < 2; ti++) for (var tj = 0; tj < 2; tj++) for (var tk = 0; tk < 2; tk++) {
+              var corner = new THREE.Vector3(bxs[ti], bys[tj], bzs[tk]);
+              corner.project(camera);
+              var pxx = ((corner.x + 1) / 2) * (rect.width || 0);
+              var pyy = ((1 - corner.y) / 2) * (rect.height || 0);
+              if (pxx < bminX) bminX = pxx;
+              if (pyy < bminY) bminY = pyy;
+              if (pxx > bmaxX) bmaxX = pxx;
+              if (pyy > bmaxY) bmaxY = pyy;
+            }
+            if (finite(bminX) && bmaxX > bminX && bmaxY > bminY) {
+              bbox3 = { x: bminX, y: bminY, width: bmaxX - bminX, height: bmaxY - bminY };
+            }
+          }
+        }
+      } catch (e3) { bbox3 = undefined; }
+      var o3 = {
         name: String(n.name || ""),
         type: String(n.type || "Object3D"),
         x: cx, y: cy,
         visible: n.visible !== false,
         interactable: !!n.name
-      });
+      };
+      if (bbox3) o3.bbox = bbox3;
+      out.push(o3);
     } catch (e) { /* skip un-projectable node */ }
   });
   return out;
@@ -327,13 +356,36 @@ function inspectBabylon() {
         { x: 0, y: 0, width: rect.width || 0, height: rect.height || 0 }
       );
       if (!coords || !finite(coords.x) || !finite(coords.y)) continue;
-      out.push({
+      // Screen-space AABB from the mesh world bounding-box corners projected to
+      // px, so hitTest/objectRect work for Babylon meshes.
+      var bboxB;
+      try {
+        var bi2 = m.getBoundingInfo && m.getBoundingInfo();
+        var corners = bi2 && bi2.boundingBox && bi2.boundingBox.vectorsWorld;
+        if (corners && corners.length) {
+          var cminX = Infinity, cminY = Infinity, cmaxX = -Infinity, cmaxY = -Infinity;
+          for (var ci = 0; ci < corners.length; ci++) {
+            var pc = BABYLON.Vector3.Project(corners[ci], BABYLON.Matrix.Identity(), scene.getTransformMatrix(), { x: 0, y: 0, width: rect.width || 0, height: rect.height || 0 });
+            if (!pc || !finite(pc.x) || !finite(pc.y)) continue;
+            if (pc.x < cminX) cminX = pc.x;
+            if (pc.y < cminY) cminY = pc.y;
+            if (pc.x > cmaxX) cmaxX = pc.x;
+            if (pc.y > cmaxY) cmaxY = pc.y;
+          }
+          if (finite(cminX) && cmaxX > cminX && cmaxY > cminY) {
+            bboxB = { x: cminX, y: cminY, width: cmaxX - cminX, height: cmaxY - cminY };
+          }
+        }
+      } catch (eB) { bboxB = undefined; }
+      var oB = {
         name: String(m.name || ""),
         type: "Mesh",
         x: coords.x, y: coords.y,
         visible: m.isVisible !== false,
         interactable: !!m.isPickable
-      });
+      };
+      if (bboxB) oB.bbox = bboxB;
+      out.push(oB);
     } catch (e) { /* skip */ }
   }
   return out;

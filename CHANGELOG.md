@@ -36,10 +36,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Tool count 47 → 51**; `podium_health` scope now includes no-vision
   canvas/WebGL automation.
 
-> Canvas adapters and the resolver land code-complete with unit coverage (359
-> tests across 31 files). Live end-to-end against real Pixi/Konva/Three sample
-> pages runs on a hardware/sample-equipped CI (the in-page bridge can't execute
-> in a headless unit run).
+> Validated live: a Playwright-WebKit suite (≈ WKWebView; `npm run test:canvas`,
+> 19 tests at DPR 1 + 3) drives the real bridge against real
+> Pixi/Konva/Fabric/Phaser/Three/Babylon scene graphs. It caught and fixed three
+> bridge bugs before release — a Konva `"*"`-selector that returned nothing, a
+> `1/DPR` over-scale on the 2D adapters, and missing hit-test bounds on 3D meshes
+> — that the mocked unit tests could not surface. Unit coverage stays at 359
+> tests across 31 files; real-device WKWebView e2e (a sample app) is a follow-up.
 
 ## [0.3.0] - 2026-06-24
 
