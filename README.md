@@ -246,7 +246,7 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 | `canvas_resolve` | udid, intent, webviewId? | bridge + semantic resolver | Maps a fuzzy intent ("close", "✕") to a ranked, **evidenced** target; fail-closed `confidentEnough` |
 | `canvas_tap` | udid, intent, bundleId?, webviewId? | resolver + native tap | Resolves + taps the confident match at absolute screen coords (else fails closed) |
 
-> **Validated live:** all six frameworks pass a Playwright-WebKit (≈ WKWebView) suite at DPR 1 + 3 (`npm run test:canvas`, 19 tests). Canvas tools require an inspectable WKWebView hosting a supported framework with its root reachable (commonly on `window`, or Pixi's `__PIXI_APP__`). No framework / no inspectable WebView → **fails closed** with an actionable error — never a vision fallback. (Vision is a separate opt-in path, `PODIUM_ALLOW_VISION=1`.)
+> **Validated live:** all six frameworks pass a Playwright-WebKit (≈ WKWebView) suite at DPR 1 + 3 (`npm run test:canvas`, 19 tests). Canvas tools require an inspectable WKWebView hosting a supported framework with its root reachable (commonly on `window`, or Pixi's `__PIXI_APP__`). No framework / no inspectable WebView → **fails closed** with an actionable error — never a vision fallback.
 
 ### Diagnostics (1)
 
@@ -419,8 +419,8 @@ src/
     canvas-types.ts # Canvas Brain shared contract (CanvasObject, selectors)
     canvas-adapters.ts  # in-page bridge: detect + walk Pixi/Konva/Fabric/Phaser/Three/Babylon
     canvas-resolver.ts  # semantic "close brain": intent → ranked, evidenced target
-    canvas-a11y.ts  # Flutter/ARIA fallback tree → CanvasObject (opportunistic)
-    canvas-vision.ts # opt-in, token-budgeted vision fallback (off by default)
+    canvas-a11y.ts  # Flutter/ARIA fallback reader → CanvasObject (scaffolding, not wired — #9)
+    canvas-vision.ts # opt-in vision fallback scaffolding (not wired — #9)
     token-report.ts # token estimators + no-vision vs vision-loop comparison
   tools/            # one file per group:
                     #   health, device, screen, steps, flow, assert, validate,

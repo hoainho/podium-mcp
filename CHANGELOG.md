@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Canvas-bridge robustness** (flagged by automated review on #8): the Three.js
+  adapter no longer risks a `TypeError` when a node lacks `getWorldPosition` (now
+  uses `Vector3.copy`); `canvas_inspect` guards against a `null` / non-object
+  bridge payload (upholds the never-throw contract); and the Konva adapter uses
+  `typeof` guards so an overridden node method cannot abort the whole walk.
+
+### Changed
+
+- **Docs honesty:** the `canvas-a11y` / `canvas-vision` modules are scaffolding
+  and **not yet wired** into the canvas tools — integration tracked in #9.
+
 ## [0.4.0] - 2026-06-25
 
 ### Added
@@ -26,10 +41,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   screenshot/vision-loop input tokens, the savings ratio, and the fixed
   per-request tool-definition overhead (heuristic estimators; swap in Anthropic
   `count_tokens` for exact figures). See `docs/token-economics.md`.
-- **Opportunistic accessibility + opt-in vision fallback** — `canvas-a11y` reads
-  a Flutter `flt-semantics` / ARIA fallback tree when present (free, no vision);
-  `canvas-vision` is an **opt-in, token-budgeted** last resort
-  (`PODIUM_ALLOW_VISION=1`), off by default and fail-closed.
+- **Accessibility + vision scaffolding (not yet wired)** — the `canvas-a11y` and
+  `canvas-vision` modules ship as the basis for a future opt-in fallback (a
+  Flutter `flt-semantics` / ARIA reader; a token-budgeted, `PODIUM_ALLOW_VISION`-
+  gated vision path). They are unit-tested but **not yet called by any tool** —
+  integration is tracked in #9.
 
 ### Changed
 

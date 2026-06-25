@@ -224,11 +224,11 @@ function inspectKonva() {
       var bbox = rectFrom(tl.x, tl.y, s.scaleW(r.width || 0), s.scaleH(r.height || 0));
       var c = centerOf(bbox);
       var o = {
-        name: String((n.name && n.name()) || (n.id && n.id()) || ""),
-        type: "Konva." + String((n.getClassName && n.getClassName()) || "Node"),
+        name: String((typeof n.name === "function" && n.name()) || (typeof n.id === "function" && n.id()) || ""),
+        type: "Konva." + String((typeof n.getClassName === "function" && n.getClassName()) || "Node"),
         x: c.x, y: c.y, bbox: bbox,
-        visible: n.isVisible ? n.isVisible() !== false : true,
-        interactable: n.isListening ? n.isListening() !== false : true
+        visible: typeof n.isVisible === "function" ? n.isVisible() !== false : true,
+        interactable: typeof n.isListening === "function" ? n.isListening() !== false : true
       };
       if (typeof n._id === "number") o.id = n._id;
       if (typeof n.text === "function") { try { var t = n.text(); if (typeof t === "string") o.text = t; } catch (e) {} }
@@ -324,7 +324,8 @@ function inspectThree() {
     try {
       var v = THREE && THREE.Vector3 ? new THREE.Vector3() : { x: 0, y: 0, z: 0 };
       if (n.getWorldPosition && v.set) { n.getWorldPosition(v); }
-      else if (n.position) { v = { x: n.position.x, y: n.position.y, z: n.position.z, project: n.position.project }; }
+      else if (n.position && v.copy) { v.copy(n.position); }
+      else if (n.position) { v = { x: n.position.x, y: n.position.y, z: n.position.z }; }
       if (v.project) { v.project(camera); }
       var ndcX = Number(v.x), ndcY = Number(v.y);
       if (!finite(ndcX) || !finite(ndcY)) return;

@@ -89,6 +89,9 @@ async function inspectCanvasSurface(
   } catch {
     return { ok: false, error: `canvas bridge returned non-JSON: ${ev.data.slice(0, 200)}` };
   }
+  if (!parsed || typeof parsed !== "object") {
+    return { ok: false, error: `canvas bridge returned an invalid payload: ${ev.data.slice(0, 200)}` };
+  }
 
   const objects = parseCanvasObjects(parsed.objects);
   const framework = typeof parsed.framework === "string" ? parsed.framework : "unknown";
