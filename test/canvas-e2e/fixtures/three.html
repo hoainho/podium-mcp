@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      /* Force the canvas to a known CSS box (800x600) so the bridge's
+         getBoundingClientRect() — and our ground-truth NDC->px math — agree
+         regardless of devicePixelRatio / backing-store size. */
+      canvas {
+        display: block;
+        width: 800px;
+        height: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // THREE (three@0.149 UMD) is injected by the harness before this runs.
+      // Build a Scene + PerspectiveCamera + WebGLRenderer (800x600, the canvas
+      // becomes renderer.domElement) and add a small mesh named "closeBtn".
+      //
+      // Ground truth (NON-circular): we mirror the bridge's projection exactly —
+      // world pos -> camera.project() (NDC) -> CSS px via the canvas client rect.
+      // This validates the bridge wires up getWorldPosition + project + NDC->px
+      // + detection correctly. The mesh is placed OFF-center (x>0) so a wrong
+      // axis/scale would visibly miss; the camera looks down -Z at the origin.
+      window.__setup = function () {
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(60, 800 / 600, 0.1, 100);
+        camera.position.set(0, 0, 5);
+        camera.lookAt(0, 0, 0);
+
+        var renderer = new THREE.WebGLRenderer();
+        renderer.setSize(800, 600, false); // false: don't override our CSS size
+        document.body.appendChild(renderer.domElement);
+
+        var geo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        var mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        var mesh = new THREE.Mesh(geo, mat);
+        mesh.name = "closeBtn";
+        mesh.position.set(1.2, 0.6, 0); // off-center, in front of the camera
+        scene.add(mesh);
+
+        // Also add an unnamed/background mesh to prove the bridge keeps named ones.
+        var bg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), mat);
+        bg.position.set(-1.0, -0.5, 0);
+        scene.add(bg);
+
+        camera.updateMatrixWorld(true);
+        scene.updateMatrixWorld(true);
+        renderer.render(scene, camera);
+
+        window.scene = scene;
+        window.camera = camera;
+        window.renderer = renderer;
+
+        // Mirror canvas-adapters.ts inspectThree(): rect from the canvas client
+        // rect (CSS px), NDC from camera.project, then NDC -> px.
+        var rect = renderer.domElement.getBoundingClientRect();
+        var v = mesh.getWorldPosition(new THREE.Vector3());
+        v.project(camera);
+        var x = ((v.x + 1) / 2) * rect.width;
+        var y = ((1 - v.y) / 2) * rect.height;
+        window.__expectedClose = { x: x, y: y };
+      };
+    </script>
+  </body>
+</html>

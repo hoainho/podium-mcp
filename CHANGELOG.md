@@ -4,6 +4,62 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Canvas-bridge robustness** (flagged by automated review on #8): the Three.js
+  adapter no longer risks a `TypeError` when a node lacks `getWorldPosition` (now
+  uses `Vector3.copy`); `canvas_inspect` guards against a `null` / non-object
+  bridge payload (upholds the never-throw contract); and the Konva adapter uses
+  `typeof` guards so an overridden node method cannot abort the whole walk.
+
+### Changed
+
+- **Docs honesty:** the `canvas-a11y` / `canvas-vision` modules are scaffolding
+  and **not yet wired** into the canvas tools — integration tracked in #9.
+
+## [0.4.0] - 2026-06-25
+
+### Added
+
+- **Canvas Brain — no-vision canvas/WebGL automation** (tool count 47 → **51**) —
+  `canvas_inspect` / `canvas_resolve` / `canvas_tap` address UIs drawn on a
+  `<canvas>` like DOM/native elements, with ZERO screenshots. An injected in-page
+  bridge auto-detects the scene graph of **Pixi / Konva / Fabric / Phaser /
+  Three.js / Babylon.js** and reports each node's tap-ready CSS-px coordinates
+  (DPR-correct). `canvas_resolve` is the "close brain": it maps a fuzzy intent
+  ("close", "✕", "settings") to a ranked, **evidenced** target and **fails
+  closed** when two targets tie; `canvas_tap` resolves + taps the confident match
+  at absolute screen coordinates. Requires an inspectable WKWebView hosting a
+  supported framework — otherwise fails closed with an actionable error, never a
+  vision fallback.
+- **`/podium-mcp:canvas` skill** — a one-command canvas agent
+  (inspect → resolve → act) over the canvas tools.
+- **`podium_token_report` + `npm run token-bench`** — quantifies Podium's token
+  savings: for an N-step flow it computes no-vision (structured element-list) vs
+  screenshot/vision-loop input tokens, the savings ratio, and the fixed
+  per-request tool-definition overhead (heuristic estimators; swap in Anthropic
+  `count_tokens` for exact figures). See `docs/token-economics.md`.
+- **Accessibility + vision scaffolding (not yet wired)** — the `canvas-a11y` and
+  `canvas-vision` modules ship as the basis for a future opt-in fallback (a
+  Flutter `flt-semantics` / ARIA reader; a token-budgeted, `PODIUM_ALLOW_VISION`-
+  gated vision path). They are unit-tested but **not yet called by any tool** —
+  integration is tracked in #9.
+
+### Changed
+
+- **Tool count 47 → 51**; `podium_health` scope now includes no-vision
+  canvas/WebGL automation.
+
+> Validated live: a Playwright-WebKit suite (≈ WKWebView; `npm run test:canvas`,
+> 19 tests at DPR 1 + 3) drives the real bridge against real
+> Pixi/Konva/Fabric/Phaser/Three/Babylon scene graphs. It caught and fixed three
+> bridge bugs before release — a Konva `"*"`-selector that returned nothing, a
+> `1/DPR` over-scale on the 2D adapters, and missing hit-test bounds on 3D meshes
+> — that the mocked unit tests could not surface. Unit coverage stays at 359
+> tests across 31 files; real-device WKWebView e2e (a sample app) is a follow-up.
+
 ## [0.3.0] - 2026-06-24
 
 ### Added

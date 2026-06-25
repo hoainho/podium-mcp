@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // Phaser is injected by the harness (UMD, defines global Phaser) before
+      // this runs. Phaser boots asynchronously — the scene's create() callback
+      // fires after the first frame, which may be AFTER the harness's 60 ms
+      // settle window. We set window.__expectedClose inside create() so the
+      // harness re-reads it after the bridge runs (it falls back to the value
+      // on window at inspect time, which is always set by then).
+      window.__setup = function () {
+        var game = new Phaser.Game({
+          type: Phaser.CANVAS,
+          width: 800,
+          height: 600,
+          backgroundColor: "#222222",
+          parent: document.body,
+          scene: {
+            create: function () {
+              // Phaser rectangle x/y is the CENTER of the shape. getBounds()
+              // center therefore equals (760, 30) exactly — the ground truth
+              // the test asserts against.
+              var r = this.add.rectangle(760, 30, 40, 40, 0xff0000);
+              r.setName("closeBtn");
+              window.__expectedClose = { x: 760, y: 30 };
+            },
+          },
+        });
+        window.game = game;
+      };
+    </script>
+  </body>
+</html>

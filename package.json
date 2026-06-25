@@ -1,8 +1,8 @@
 {
   "name": "podium-mcp",
   "mcpName": "io.github.hoainho/podium-mcp",
-  "version": "0.3.0",
-  "description": "Mobile E2E MCP server — one stdio server (47 tools) for iOS (simulator + real) and Android (emulator + real) device control, native UI automation, end-to-end flows, React Native debugging, WebView DOM, and no-vision Unity/GL game-engine automation.",
+  "version": "0.4.0",
+  "description": "Mobile E2E MCP server — one stdio server (51 tools) for iOS (simulator + real) and Android (emulator + real) device control, native UI automation, end-to-end flows, React Native debugging, WebView DOM, no-vision Unity/GL game-engine automation, and a no-vision canvas brain (Pixi/Konva/Fabric/Phaser/Three/Babylon).",
   "type": "module",
   "license": "MIT",
   "author": "hoainho <nhoxtvt@gmail.com>",
@@ -34,7 +34,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
-    "benchmark": "npm run build && node --experimental-strip-types scripts/benchmark.ts"
+    "benchmark": "npm run build && node --experimental-strip-types scripts/benchmark.ts",
+    "token-bench": "node scripts/token-bench.mjs",
+    "test:canvas": "vitest run --config vitest.canvas.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -43,6 +45,13 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.21",
+    "babylonjs": "^7.54.3",
+    "fabric": "^5.5.2",
+    "konva": "^9.3.22",
+    "phaser": "^3.90.0",
+    "pixi.js": "^7.4.3",
+    "playwright": "^1.61.1",
+    "three": "^0.149.0",
     "typescript": "^5.8.3",
     "vitest": "^3.2.2"
   },

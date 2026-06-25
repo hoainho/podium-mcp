@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      /* Pin the canvas CSS box to 800x600 so the bridge's
+         getBoundingClientRect() and our ground-truth projection agree across
+         devicePixelRatios. */
+      #r {
+        display: block;
+        width: 800px;
+        height: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="r" width="800" height="600"></canvas>
+    <script>
+      // BABYLON (babylonjs UMD -> global BABYLON) is injected by the harness
+      // before this runs. Build an Engine + Scene + camera and a mesh named
+      // "closeBtn"; render once and expose scene/engine on window.
+      //
+      // Ground truth (NON-circular): mirror inspectBabylon() — project the
+      // mesh's absolute position with BABYLON.Vector3.Project against the SAME
+      // viewport the bridge uses ({0,0,rect.width,rect.height}). The mesh sits
+      // off-center so a wrong axis/scale would miss; this validates the bridge
+      // invokes Project + viewport mapping + detection correctly.
+      window.__setup = function () {
+        var canvas = document.getElementById("r");
+        var engine = new BABYLON.Engine(canvas, true);
+        var scene = new BABYLON.Scene(engine);
+
+        var camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0, 0, -5), scene);
+        camera.setTarget(BABYLON.Vector3.Zero());
+
+        var mesh = BABYLON.MeshBuilder.CreateBox("closeBtn", { size: 0.4 }, scene);
+        mesh.position = new BABYLON.Vector3(1.2, 0.6, 0); // off-center, in front
+        mesh.isPickable = true;
+
+        // An extra mesh to prove the bridge reports more than just the target.
+        var bg = BABYLON.MeshBuilder.CreateBox("bg", { size: 0.2 }, scene);
+        bg.position = new BABYLON.Vector3(-1.0, -0.5, 0);
+
+        scene.render();
+
+        window.scene = scene;
+        window.engine = engine;
+
+        // Mirror canvas-adapters.ts inspectBabylon() exactly.
+        var rect = canvas.getBoundingClientRect();
+        var pos = mesh.getAbsolutePosition();
+        var coords = BABYLON.Vector3.Project(
+          pos,
+          BABYLON.Matrix.Identity(),
+          scene.getTransformMatrix(),
+          { x: 0, y: 0, width: rect.width, height: rect.height }
+        );
+        window.__expectedClose = { x: coords.x, y: coords.y };
+      };
+    </script>
+  </body>
+</html>

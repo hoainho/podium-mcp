@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      #stage {
+        width: 800px;
+        height: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <script>
+      // Konva is injected by the harness (UMD) before this runs. Build a scene
+      // with a known "close" button and expose the stage on window so the bridge
+      // can find it. Ground truth: the close button's center in canvas-local CSS
+      // px is (760, 30) — a fixed placement independent of devicePixelRatio.
+      window.__setup = function () {
+        var stage = new Konva.Stage({ container: "stage", width: 800, height: 600 });
+        var layer = new Konva.Layer();
+        stage.add(layer);
+        layer.add(new Konva.Rect({ x: 0, y: 0, width: 800, height: 600, fill: "#222", name: "bg" }));
+        layer.add(new Konva.Rect({ x: 740, y: 10, width: 40, height: 40, fill: "red", name: "closeBtn" }));
+        layer.add(new Konva.Text({ x: 752, y: 20, text: "✕", fontSize: 20, fill: "#fff", name: "closeLabel" }));
+        layer.draw();
+        window.stage = stage;
+        window.__expectedClose = { x: 760, y: 30 };
+      };
+    </script>
+  </body>
+</html>

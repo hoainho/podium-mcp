@@ -1,7 +1,7 @@
 {
   "name": "podium-mcp",
-  "description": "Mobile E2E MCP server — 47 tools for iOS (simulator + real) and Android (emulator + real) device control, native UI automation, end-to-end Maestro flows, React Native debugging, WebView DOM, and no-vision Unity/GL game-engine automation. Requires macOS + Xcode.",
-  "version": "0.3.0",
+  "description": "Mobile E2E MCP server — 51 tools for iOS (simulator + real) and Android (emulator + real) device control, native UI automation, end-to-end Maestro flows, React Native debugging, WebView DOM, no-vision Unity/GL game-engine automation, and a no-vision canvas brain (Pixi/Konva/Fabric/Phaser/Three/Babylon). Requires macOS + Xcode.",
+  "version": "0.4.0",
   "author": {
     "name": "hoainho",
     "email": "nhoxtvt@gmail.com",

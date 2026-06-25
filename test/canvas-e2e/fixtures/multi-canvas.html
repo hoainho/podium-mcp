@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      #decoy {
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+      #stage {
+        width: 800px;
+        height: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Decoy: a small bare canvas that the bridge must NOT pick. -->
+    <canvas id="decoy" width="100" height="80"></canvas>
+    <!-- Real stage container for the Konva scene. -->
+    <div id="stage"></div>
+    <script>
+      // Konva is injected by the harness (UMD) before this runs. The bridge
+      // must pick the LARGEST canvas (800×600) and ignore the 100×80 decoy.
+      // Ground truth: the close button's center in canvas-local CSS px is
+      // (760, 30) — independent of devicePixelRatio.
+      window.__setup = function () {
+        var stage = new Konva.Stage({ container: "stage", width: 800, height: 600 });
+        var layer = new Konva.Layer();
+        stage.add(layer);
+        layer.add(new Konva.Rect({ x: 0, y: 0, width: 800, height: 600, fill: "#222", name: "bg" }));
+        layer.add(new Konva.Rect({ x: 740, y: 10, width: 40, height: 40, fill: "red", name: "closeBtn" }));
+        layer.draw();
+        window.stage = stage;
+        window.__expectedClose = { x: 760, y: 30 };
+      };
+    </script>
+  </body>
+</html>
