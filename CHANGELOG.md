@@ -4,6 +4,43 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-25
+
+### Added
+
+- **Canvas Brain — no-vision canvas/WebGL automation** (tool count 47 → **51**) —
+  `canvas_inspect` / `canvas_resolve` / `canvas_tap` address UIs drawn on a
+  `<canvas>` like DOM/native elements, with ZERO screenshots. An injected in-page
+  bridge auto-detects the scene graph of **Pixi / Konva / Fabric / Phaser /
+  Three.js / Babylon.js** and reports each node's tap-ready CSS-px coordinates
+  (DPR-correct). `canvas_resolve` is the "close brain": it maps a fuzzy intent
+  ("close", "✕", "settings") to a ranked, **evidenced** target and **fails
+  closed** when two targets tie; `canvas_tap` resolves + taps the confident match
+  at absolute screen coordinates. Requires an inspectable WKWebView hosting a
+  supported framework — otherwise fails closed with an actionable error, never a
+  vision fallback.
+- **`/podium-mcp:canvas` skill** — a one-command canvas agent
+  (inspect → resolve → act) over the canvas tools.
+- **`podium_token_report` + `npm run token-bench`** — quantifies Podium's token
+  savings: for an N-step flow it computes no-vision (structured element-list) vs
+  screenshot/vision-loop input tokens, the savings ratio, and the fixed
+  per-request tool-definition overhead (heuristic estimators; swap in Anthropic
+  `count_tokens` for exact figures). See `docs/token-economics.md`.
+- **Opportunistic accessibility + opt-in vision fallback** — `canvas-a11y` reads
+  a Flutter `flt-semantics` / ARIA fallback tree when present (free, no vision);
+  `canvas-vision` is an **opt-in, token-budgeted** last resort
+  (`PODIUM_ALLOW_VISION=1`), off by default and fail-closed.
+
+### Changed
+
+- **Tool count 47 → 51**; `podium_health` scope now includes no-vision
+  canvas/WebGL automation.
+
+> Canvas adapters and the resolver land code-complete with unit coverage (359
+> tests across 31 files). Live end-to-end against real Pixi/Konva/Three sample
+> pages runs on a hardware/sample-equipped CI (the in-page bridge can't execute
+> in a headless unit run).
+
 ## [0.3.0] - 2026-06-24
 
 ### Added

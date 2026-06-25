@@ -4,14 +4,14 @@
 
 **One baton. Every instrument.**
 
-A single MCP stdio endpoint with **47 tools** for **iOS (simulator + real) and Android** device control, native UI automation, end-to-end flows, trustworthy assertions, React Native debugging, **WebView DOM + network inspection**, and **no-vision Unity/WebGL/GL game-engine automation** — one connection instead of half a dozen servers.
+A single MCP stdio endpoint with **51 tools** for **iOS (simulator + real) and Android** device control, native UI automation, end-to-end flows, trustworthy assertions, React Native debugging, **WebView DOM + network inspection**, **no-vision Unity/WebGL/GL game-engine automation**, and a **no-vision canvas brain** (Pixi/Konva/Fabric/Phaser/Three/Babylon) — one connection instead of half a dozen servers.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7C3AED)](https://modelcontextprotocol.io)
-[![Tools](https://img.shields.io/badge/tools-47-7C3AED.svg)](#the-47-tools)
-[![Tests](https://img.shields.io/badge/tests-269%20passing-brightgreen.svg)](#development--testing)
+[![Tools](https://img.shields.io/badge/tools-51-7C3AED.svg)](#the-51-tools)
+[![Tests](https://img.shields.io/badge/tests-359%20passing-brightgreen.svg)](#development--testing)
 [![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
 [![mcp.so](https://img.shields.io/badge/mcp.so-listed-7C3AED)](https://mcp.so/server/io.github.hoainho/podium-mcp)
 
@@ -37,6 +37,13 @@ A podium is where a maestro stands — one place to conduct the whole orchestra.
 - **Game-engine automation, no vision** — drive Unity/WebGL/GL objects by name/path/component with engine-reported screen coordinates, via AltTester (native) or a WebGL-in-WebView CDP bridge.
 
 Rather than wiring several MCP servers into every client config, `podium-mcp` exposes everything behind **one connection**, with a shared `execFile` layer (no shell), consistent structured errors, automatic retry around Maestro's iOS-driver flakiness, and a single health-check tool to confirm what's available on the host.
+
+## What's new in v0.4.0
+
+- **Canvas brain (no-vision)** — `canvas_inspect` / `canvas_resolve` / `canvas_tap` drive canvas/WebGL UIs (Pixi/Konva/Fabric/Phaser/Three/Babylon) as DOM-like elements with tap-ready coordinates. `canvas_resolve` maps a fuzzy intent ("close", "✕") to a ranked, **evidenced** target and **fails closed** on ties; `canvas_tap` resolves + taps it. NO screenshots. (tool count 47 → **51**)
+- **`/podium-mcp:canvas` skill** — one-command canvas agent: inspect → resolve → act.
+- **Token-savings report** — `podium_token_report` + `npm run token-bench` + [`docs/token-economics.md`](docs/token-economics.md) quantify no-vision vs screenshot/vision-loop tokens and the fixed per-request tool-def overhead.
+- **Opportunistic a11y + opt-in vision** — read a Flutter/ARIA fallback tree when present (free, no vision); vision is an opt-in, token-budgeted last resort (`PODIUM_ALLOW_VISION=1`, off by default).
 
 ## What's new in v0.3.0
 
@@ -64,7 +71,7 @@ Rather than wiring several MCP servers into every client config, `podium-mcp` ex
 - [Install](#install)
 - [Usage](#usage)
 - [Quick start](#quick-start-order-of-use)
-- [The 47 tools](#the-47-tools)
+- [The 51 tools](#the-51-tools)
 - [The oracle ladder — trustworthy assertions](#the-oracle-ladder--trustworthy-assertions)
 - [Native-first gesture backend](#native-first-gesture-backend)
 - [WebView & RN network introspection](#webview--rn-network-introspection)
@@ -112,7 +119,7 @@ No manual config — one-time marketplace setup, then install:
 /plugin install podium-mcp@podium
 ```
 
-The plugin auto-starts the MCP server (all 47 tools) and ships four skills:
+The plugin auto-starts the MCP server (all 51 tools) and ships five skills:
 
 | Skill | Invoke | What it does |
 |---|---|---|
@@ -120,6 +127,7 @@ The plugin auto-starts the MCP server (all 47 tools) and ships four skills:
 | E2E flow | `/podium-mcp:e2e <UDID> <BUNDLE_ID> [path or description]` | Run or author a Maestro flow |
 | Bug repro | `/podium-mcp:bug-repro <UDID> <BUNDLE_ID> <description>` | Video + logs + crash evidence capture |
 | RN debug | `/podium-mcp:rn-debug [UDID] [logs\|apps\|crash\|all]` | Metro logs, connected apps, crash reports |
+| Canvas brain | `/podium-mcp:canvas <UDID> <intent>` | Inspect / resolve / tap canvas-WebGL UIs, no vision |
 
 ### npx (zero install)
 
@@ -156,7 +164,7 @@ Register the built server with any MCP client. **Claude Code** (`.mcp.json`):
 }
 ```
 
-Quick manual smoke test over raw stdio (lists the 47 registered tools):
+Quick manual smoke test over raw stdio (lists the 51 registered tools):
 
 ```bash
 printf '%s\n' \
@@ -177,7 +185,7 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 6. **Inspect WebViews** — `webview_inspect` → tap coordinates, `webview_eval`, `webview_navigate`, `webview_network`.
 7. **Capture & debug** — `screenshot` / `record_start`→`record_stop`; `metro_logs` / `metro_network` / `metro_state`; `crash_list` / `crash_get`.
 
-## The 47 tools
+## The 51 tools
 
 > Every tool returns structured JSON and never throws — failures come back as MCP tool errors. See [`docs/tool-catalog.md`](docs/tool-catalog.md) for the authoritative per-parameter reference.
 >
@@ -193,6 +201,22 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 | `engine_call` | udid, by?, value, component, method, parameters? | AltTester / CDP | Invokes a C# component method by reflection (the engine analog of a DOM event handler) |
 
 > Engine tools require an **AltTester-instrumented build** (dev/staging) reachable on the forwarded port, or a `window.__podiumEngine` bridge for WebGL-in-WebView. On a non-instrumented build they **fail closed** with an actionable error — never a vision fallback.
+
+### Canvas brain — Pixi/Konva/Fabric/Phaser/Three/Babylon, no vision (3)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `canvas_inspect` | udid, by?, value?, webviewId? | injected scene-graph bridge (CDP eval) | Lists canvas objects with tap-ready CSS-px coords — **no screenshots** |
+| `canvas_resolve` | udid, intent, webviewId? | bridge + semantic resolver | Maps a fuzzy intent ("close", "✕") to a ranked, **evidenced** target; fail-closed `confidentEnough` |
+| `canvas_tap` | udid, intent, bundleId?, webviewId? | resolver + native tap | Resolves + taps the confident match at absolute screen coords (else fails closed) |
+
+> Canvas tools require an inspectable WKWebView hosting a supported framework with its root reachable (commonly on `window`, or Pixi's `__PIXI_APP__`). No framework / no inspectable WebView → **fails closed** with an actionable error — never a vision fallback. (Vision is a separate opt-in path, `PODIUM_ALLOW_VISION=1`.)
+
+### Diagnostics (1)
+
+| Tool | Key params | Backing engine | Behavior |
+|---|---|---|---|
+| `podium_token_report` | steps?, screenshotWidth?, screenshotHeight?, elementsPerStep?, toolCount? | token estimators | No-vision vs screenshot/vision-loop input tokens, the savings ratio, and the per-request tool-definition overhead |
 
 ### Health & toolchain (1)
 
@@ -370,7 +394,7 @@ docs/               # tool catalog, e2e transcript, roadmap
 ```bash
 npm run build       # tsc
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run — 269 unit/integration tests (exec/network mocked, no sim needed)
+npm test            # vitest run — 359 unit/integration tests (exec/network mocked, no sim needed)
 npm run benchmark   # spawn a fresh server over stdio and sweep the tool suite
 node e2e/smoke.e2e.mjs        # real E2E against a booted simulator (macOS + Xcode)
 node e2e/full-smoke.e2e.mjs   # drives the iOS-sim tool handlers (happy + structured-error paths)
@@ -378,7 +402,7 @@ node e2e/android-smoke.e2e.mjs # Android emulator/device smoke (story A3)
 node e2e/engine-smoke.e2e.mjs  # AltTester engine smoke; skips without an instrumented build (story C4)
 ```
 
-**269 tests across 24 files, all passing** — including the v0.3.0 device-target registry, the Android `adb` driver + `uiautomator` parser, the AltTester engine client + WebGL bridge, the `devicectl`/WDA real-iOS parsers, plus the v0.2.0 oracle ladder, recording watchdog, gesture-parity, HAR export, WebView, and Metro paths.
+**359 tests across 31 files, all passing** — including the v0.3.0 device-target registry, the Android `adb` driver + `uiautomator` parser, the AltTester engine client + WebGL bridge, the `devicectl`/WDA real-iOS parsers, plus the v0.2.0 oracle ladder, recording watchdog, gesture-parity, HAR export, WebView, and Metro paths.
 
 Standards: TypeScript strict, **no `as any` / `@ts-ignore`**, **no shell execution** (all commands via `lib/exec.ts`), tools return structured errors instead of throwing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the "add a new tool" checklist.
 

@@ -11,6 +11,8 @@ import { registerWebviewTools } from "./tools/webview.js";
 import { registerAssertTools } from "./tools/assert.js";
 import { registerValidateTools } from "./tools/validate.js";
 import { registerEngineTools } from "./tools/engine.js";
+import { registerCanvasTools } from "./tools/canvas.js";
+import { registerTokenTools } from "./tools/token.js";
 import { prefetchDevices } from "./lib/simctl.js";
 import { getBackend } from "./lib/native.js";
 import { registerDriver } from "./lib/device-target.js";
@@ -20,7 +22,7 @@ import { iosRealDriver } from "./lib/iosreal.js";
 
 const server = new McpServer({
   name: "podium",
-  version: "0.3.0",
+  version: "0.4.0",
 });
 
 registerHealthTool(server);
@@ -33,6 +35,8 @@ registerWebviewTools(server);
 registerAssertTools(server);
 registerValidateTools(server);
 registerEngineTools(server);
+registerCanvasTools(server);
+registerTokenTools(server);
 
 // Register platform drivers (v0.3.0): ios-sim wraps simctl. The android and
 // ios-real drivers register here as they land.

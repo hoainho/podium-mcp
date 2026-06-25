@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.hoainho/podium-mcp",
-  "description": "Mobile E2E automation MCP (47 tools): iOS + Android, native UI, RN debug, no-vision game engines",
-  "version": "0.3.0",
+  "description": "Mobile E2E MCP (51 tools): iOS + Android, native UI + canvas/WebGL, no-vision, RN debug",
+  "version": "0.4.0",
   "websiteUrl": "https://github.com/hoainho/podium-mcp",
   "repository": {
     "url": "https://github.com/hoainho/podium-mcp",
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "podium-mcp",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "runtimeHint": "npx",
       "transport": { "type": "stdio" }
     }

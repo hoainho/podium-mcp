@@ -1,8 +1,8 @@
 {
   "name": "podium-mcp",
   "mcpName": "io.github.hoainho/podium-mcp",
-  "version": "0.3.0",
-  "description": "Mobile E2E MCP server — one stdio server (47 tools) for iOS (simulator + real) and Android (emulator + real) device control, native UI automation, end-to-end flows, React Native debugging, WebView DOM, and no-vision Unity/GL game-engine automation.",
+  "version": "0.4.0",
+  "description": "Mobile E2E MCP server — one stdio server (51 tools) for iOS (simulator + real) and Android (emulator + real) device control, native UI automation, end-to-end flows, React Native debugging, WebView DOM, no-vision Unity/GL game-engine automation, and a no-vision canvas brain (Pixi/Konva/Fabric/Phaser/Three/Babylon).",
   "type": "module",
   "license": "MIT",
   "author": "hoainho <nhoxtvt@gmail.com>",
@@ -34,7 +34,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
-    "benchmark": "npm run build && node --experimental-strip-types scripts/benchmark.ts"
+    "benchmark": "npm run build && node --experimental-strip-types scripts/benchmark.ts",
+    "token-bench": "node scripts/token-bench.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
