@@ -2,7 +2,7 @@
   "name": "podium-mcp",
   "mcpName": "io.github.hoainho/podium-mcp",
   "version": "0.4.0",
-  "description": "Mobile E2E MCP server — one stdio server (51 tools) for iOS (simulator + real) and Android (emulator + real) device control, native UI automation, end-to-end flows, React Native debugging, WebView DOM, no-vision Unity/GL game-engine automation, and a no-vision canvas brain (Pixi/Konva/Fabric/Phaser/Three/Babylon).",
+  "description": "Mobile + canvas automation MCP for AI agents — one stdio server, 51 tools: iOS (simulator + real) & Android control, native UI automation, Maestro E2E flows, evidenced oracle-ladder assertions, React Native/Metro debugging, WebView DOM + network capture, and a no-vision canvas/WebGL brain (Pixi/Konva/Fabric/Phaser/Three/Babylon) that drives game UIs like DOM elements — ~5x fewer tokens than screenshot/vision loops.",
   "type": "module",
   "license": "MIT",
   "author": "hoainho <nhoxtvt@gmail.com>",
