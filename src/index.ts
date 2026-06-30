@@ -22,7 +22,7 @@ import { iosRealDriver } from "./lib/iosreal.js";
 
 const server = new McpServer({
   name: "podium",
-  version: "0.4.0",
+  version: "0.4.1",
 });
 
 registerHealthTool(server);

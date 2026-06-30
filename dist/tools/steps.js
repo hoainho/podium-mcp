@@ -244,13 +244,25 @@ export function registerStepsTools(server) {
             if (stepDelayMs && stepDelayMs > 0)
                 await sleep(stepDelayMs);
         }
-        return okResult({
+        const payload = {
             ok: allOk,
             backend: be?.name ?? "maestro",
             total: steps.length,
             ran: results.length,
             ...(failedAtIndex !== null ? { failedAtIndex } : {}),
             results,
+        };
+        if (allOk)
+            return okResult(payload);
+        // A failed batch must NOT report status:"ok" — a weak model would read the
+        // envelope status, not scan per-step results, and assume success.
+        const failed = failedAtIndex !== null ? results[failedAtIndex] : undefined;
+        return okResult(payload, {
+            status: "failed",
+            next: [
+                `Step ${failedAtIndex} (${failed?.action ?? "?"}) failed${failed?.error ? `: ${failed.error}` : ""}.`,
+                "Call inspect_screen to confirm the current UI, fix that step's target, then re-run the remaining steps from that index.",
+            ],
         });
     });
 }

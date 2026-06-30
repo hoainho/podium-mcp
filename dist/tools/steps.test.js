@@ -136,3 +136,30 @@ describe("run_steps", () => {
         expect(payload.results[0].ok).toBe(false);
     });
 });
+describe("run_steps -- batch failure is status-aware (G005)", () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+    it("a failed step yields status:'failed' + actionable next (not a misleading status:'ok')", async () => {
+        vi.spyOn(nativeLib, "getBackend").mockResolvedValue(makeFakeBackend());
+        vi.spyOn(gestureLib, "nativeTap").mockResolvedValue({ ok: false, backend: "maestro", detail: "no backend" });
+        const fake = await buildServer();
+        const handler = fake._handlers.get("run_steps");
+        const res = await handler({ udid: "UDID", steps: [{ action: "tap", x: 1, y: 2 }] });
+        const sc = res.structuredContent;
+        expect(sc?.status).toBe("failed");
+        expect(sc?.ok).toBe(false);
+        expect(sc?.next?.[0]).toMatch(/Step 0 \(tap\) failed/);
+        const body = JSON.parse(res.content[0].text);
+        expect(body.status).toBe("failed");
+        expect(body.next?.[1]).toMatch(/inspect_screen/);
+    });
+    it("an all-ok batch reports status:'ok'", async () => {
+        vi.spyOn(nativeLib, "getBackend").mockResolvedValue(makeFakeBackend());
+        vi.spyOn(gestureLib, "nativeTap").mockResolvedValue({ ok: true, backend: "mobilecli", detail: "tapped" });
+        const fake = await buildServer();
+        const handler = fake._handlers.get("run_steps");
+        const res = await handler({ udid: "UDID", steps: [{ action: "tap", x: 1, y: 2 }] });
+        expect(res.structuredContent?.status).toBe("ok");
+    });
+});

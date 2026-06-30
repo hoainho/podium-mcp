@@ -132,3 +132,40 @@ describe("tap_with_fallback — a11y structural-change oracle (V2-3)", () => {
         expect(payload.oracle).toBe("unverified");
     }, 15_000);
 });
+describe("tap_on -- fail-closed on ambiguous native match (G004)", () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+    const twoMatches = [
+        { label: "Login", frame: { x: 0, y: 0, width: 10, height: 10 } },
+        { label: "Login", frame: { x: 0, y: 100, width: 10, height: 10 } },
+    ];
+    it("returns an 'ambiguous' structured error with candidates when >1 element matches and no index", async () => {
+        vi.spyOn(nativeLib, "getBackend").mockResolvedValue({
+            name: "idb",
+            describeAll: vi.fn(async () => twoMatches),
+            tap: vi.fn(async () => OK),
+        });
+        const fake = await buildServer();
+        const tapOn = fake.handlers.get("tap_on");
+        const res = await tapOn({ udid: "U", bundleId: "com.x", text: "Login" });
+        expect(res.isError).toBe(true);
+        expect(res.content[0].text).toMatch(/2 elements match/);
+        const sc = res.structuredContent;
+        expect(sc?.status).toBe("ambiguous");
+        expect(sc?.error?.candidates).toHaveLength(2);
+    });
+    it("taps the chosen element (no ambiguity error) when index is provided", async () => {
+        const tapSpy = vi.fn(async () => OK);
+        vi.spyOn(nativeLib, "getBackend").mockResolvedValue({
+            name: "idb",
+            describeAll: vi.fn(async () => twoMatches),
+            tap: tapSpy,
+        });
+        const fake = await buildServer();
+        const tapOn = fake.handlers.get("tap_on");
+        const res = await tapOn({ udid: "U", bundleId: "com.x", text: "Login", index: 1 });
+        expect(res.isError).toBeUndefined();
+        expect(tapSpy).toHaveBeenCalledWith("U", 5, 105);
+    });
+});

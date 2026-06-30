@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Model-agnostic result envelope** — every tool result now carries a stable,
+  machine-readable `status` (`ok` | `needs_retry` | `ambiguous` |
+  `failed_precondition` | `unverifiable` | `failed`) plus, where useful, a `next[]`
+  list of suggested follow-up actions, mirrored to MCP `structuredContent`. Errors
+  upgrade from bare strings to a structured `{code, message, remediation,
+  suggestedTool, candidates}`. The goal: a weaker model is *told* the state and the
+  next action by the server, instead of inferring it from prose — so Podium drives
+  flows reliably regardless of model. (`src/lib/result.ts`; backward compatible.)
+- **`tap_on` fails closed on ambiguity** — when >1 native element matches and no
+  `index` is given, it returns an `ambiguous` error with the candidate list instead
+  of silently tapping the first match. Ports the `canvas_resolve` fail-closed
+  pattern to the native action layer.
+- **`run_steps` is status-aware on failure** — a failed batch now reports
+  `status:"failed"` + an actionable `next[]` (which step, why, how to recover)
+  rather than a misleading `ok` envelope.
+- **Tool-choice disambiguation** — `tap_on` and `canvas_tap` gained explicit
+  "When to use" guidance (vs `run_steps` / `run_flow` / `webview_inspect`).
+- **Decidability eval** (`npm run eval:model-agnostic`) — a reproducible, no-API CI
+  gate proving every canonical-flow decision point is resolvable from the envelope
+  alone (decision logic lives in the server, not the model). See
+  `docs/MODEL-AGNOSTIC-AUDIT.md`.
+
 ### Fixed
 
 - **Canvas-bridge robustness** (flagged by automated review on #8): the Three.js
@@ -205,6 +229,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Docs: `README.md`, `docs/tool-catalog.md`, `docs/e2e-demo.md`.
 - 66 unit tests (vitest); TypeScript strict; no type suppression.
 
+[0.4.0]: https://github.com/hoainho/podium-mcp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/hoainho/podium-mcp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/hoainho/podium-mcp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/hoainho/podium-mcp/releases/tag/v0.1.0

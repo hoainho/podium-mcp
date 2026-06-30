@@ -46,14 +46,19 @@ async function inspectCanvasSurface(udid, webviewId, selector) {
     if (!wv.ok)
         return wv;
     const args = selector ? `${JSON.stringify(selector.kind)},${JSON.stringify(selector.value)}` : "";
-    // bridge install + inspect + largest-canvas viewport offset, serialized once.
-    const expr = buildCanvasBridgeScript() +
-        ";(function(){var r=window.__podiumCanvas.inspect(" +
+    // Bridge install + inspect + largest-canvas viewport offset, serialized once.
+    // Wrapped as a SINGLE IIFE expression: some WebView eval backends (notably
+    // mobilecli) wrap the script as `try { return (<expr>); }`, which rejects the
+    // bridge's statement-style, leading-`;` form (`return (;(function...` =
+    // SyntaxError). An outer IIFE keeps the whole payload one expression.
+    const expr = "(function(){" +
+        buildCanvasBridgeScript() +
+        ";return (function(){var r=window.__podiumCanvas.inspect(" +
         args +
         ");var cs=document.getElementsByTagName('canvas'),b=null,ba=-1;" +
         "for(var i=0;i<cs.length;i++){var a=cs[i].width*cs[i].height;if(a>ba){ba=a;b=cs[i];}}" +
         "var o=b?b.getBoundingClientRect():{left:0,top:0};" +
-        "return JSON.stringify({framework:r.framework,objects:r.objects,canvasLeft:o.left,canvasTop:o.top});})()";
+        "return JSON.stringify({framework:r.framework,objects:r.objects,canvasLeft:o.left,canvasTop:o.top});})();})()";
     const ev = await evalWebview(udid, wv.data.id, expr);
     if (!ev.ok)
         return ev;
@@ -147,7 +152,8 @@ export function registerCanvasTools(server) {
     // ─── canvas_tap ──────────────────────────────────────────────────────────────
     server.tool("canvas_tap", "Resolves an intent to a single canvas target and TAPS it at absolute screen coordinates — the native-like " +
         "'close this' for canvas UIs. Fail-closed: if no confident, unambiguous match exists it does NOT tap and " +
-        "returns the candidates so you can disambiguate. NO vision." +
+        "returns the candidates so you can disambiguate. NO vision. " +
+        "When to use: the UI is drawn on a <canvas> (Pixi/Konva/Fabric/Phaser/Three/Babylon game UIs). For native iOS UI use tap_on; for WebView DOM use webview_inspect then tap_on with the returned coordinates." +
         CANVAS_NOTE, {
         udid: z.string().describe("Simulator / device UDID"),
         intent: z.string().describe('What to tap, e.g. "close", "play", or an exact object name'),

@@ -134,7 +134,8 @@ export function registerScreenTools(server: McpServer): void {
     "Tap, double-tap, or long-press an element on screen via an ephemeral Maestro flow. " +
       "Target by text (regex), accessibility id, or absolute x/y coordinates. " +
       "bundleId is REQUIRED — Maestro needs it for the appId flow header." +
-      " WebView caution: text/id selectors only resolve native accessibility nodes. Web-rendered elements inside WKWebView are invisible — tap_on will report COMPLETED but nothing is tapped. Use x+y coordinates instead for WebView content.",
+      " WebView caution: text/id selectors only resolve native accessibility nodes. Web-rendered elements inside WKWebView are invisible — tap_on will report COMPLETED but nothing is tapped. Use x+y coordinates instead for WebView content. " +
+      "When to use: ONE native tap/long-press/double-tap. For >2 sequential gestures use run_steps; for canvas/WebGL game UIs use canvas_tap; for WebView DOM elements use webview_inspect to resolve coordinates first.",
     {
       udid: z.string().describe("Simulator / device UDID"),
       bundleId: z
@@ -160,11 +161,11 @@ export function registerScreenTools(server: McpServer): void {
     async ({ udid, bundleId, text, id, x, y, double: isDouble, long: isLong, longDurationMs, index, timeoutMs, noLaunch }) => {
       // Validate: x/y pairing first (an x-only call is a malformed point, not a missing selector)
       if ((x !== undefined) !== (y !== undefined)) {
-        return errorResult("tap_on: x and y must be provided together.");
+        return errorResult({ code: "failed_precondition", message: "tap_on: x and y must be provided together.", remediation: "Provide BOTH x and y (logical points), or use a text/id selector instead." });
       }
       const hasPoint = x !== undefined && y !== undefined;
       if (!text && !id && !hasPoint) {
-        return errorResult("tap_on requires at least one of: text, id, or x+y coordinates.");
+        return errorResult({ code: "failed_precondition", message: "tap_on requires at least one of: text, id, or x+y coordinates.", remediation: "Call inspect_screen first to read tappable nodes, then pass that node's text or id.", suggestedTool: "inspect_screen({ udid })" });
       }
 
       // Choose command
@@ -205,6 +206,23 @@ export function registerScreenTools(server: McpServer): void {
           const elements = await be.describeAll(udid);
           if (elements) {
             const matches = findElements(elements, { text, id });
+            // Fail closed on ambiguity: >1 native match and no explicit index ->
+            // do NOT silently tap the first (a weak model would never know it
+            // hit the wrong element). Return the candidates so the caller picks.
+            if (matches.length > 1 && index === undefined) {
+              return errorResult({
+                code: "ambiguous",
+                message: `tap_on: ${matches.length} elements match ${text ? `text ${JSON.stringify(text)}` : `id ${JSON.stringify(id)}`} -- not tapping (fail-closed).`,
+                remediation: "Pass index:N to choose one (0-based, in the order listed), or use a more specific text/id.",
+                suggestedTool: "inspect_screen({ udid })",
+                candidates: matches.slice(0, 10).map((m, i) => ({
+                  index: i,
+                  label: m.label ?? m.value ?? "",
+                  ...(m.identifier ? { id: m.identifier } : {}),
+                  center: elementCenter(m),
+                })),
+              });
+            }
             const el = matches[index ?? 0];
             if (el) point = elementCenter(el);
           }
@@ -212,7 +230,7 @@ export function registerScreenTools(server: McpServer): void {
         if (point) {
           const r = await be.tap(udid, point.x, point.y);
           if (r.code === 0) {
-            return okResult({ ok: true, cmd, selector, backend: be.name, tappedAt: point });
+            return okResult({ ok: true, cmd, selector, backend: be.name, tappedAt: point }, { next: ["Confirm the tap had the intended effect with inspect_screen or assert_visible."] });
           }
         }
       }
@@ -236,13 +254,11 @@ export function registerScreenTools(server: McpServer): void {
       try {
         const result = await runMaestroFlow({ udid, yaml, timeoutMs: timeoutMs ?? 30_000 });
         if (!result.passed) {
-          return errorResult(
-            `tap_on flow did not pass (retries: ${result.retries}):\n${result.rawOutput}`
-          );
+          return errorResult({ code: "failed", message: `tap_on flow did not pass (retries: ${result.retries}).`, remediation: "Selector may match 0 nodes, or the target is WebView content (native selectors cannot see it -- use x+y). Re-run inspect_screen to confirm the node exists.", suggestedTool: "inspect_screen({ udid })" });
         }
-        return okResult({ ok: true, cmd, selector, retries: result.retries, steps: result.steps });
+        return okResult({ ok: true, cmd, selector, retries: result.retries, steps: result.steps }, { next: ["A passing flow does NOT prove the element was hit -- confirm with inspect_screen or assert_visible.", "If the target was WebView content, native selectors silently no-op; re-tap with x+y coordinates."] });
       } catch (err) {
-        return errorResult(`tap_on failed: ${String(err)}`);
+        return errorResult({ code: "failed", message: `tap_on failed: ${String(err)}`, remediation: "Check the device is booted and the app is in the foreground (device_boot / app_launch)." });
       }
     }
   );
@@ -269,9 +285,9 @@ export function registerScreenTools(server: McpServer): void {
         launchApp: !noLaunch,
       });
       if (!g.ok) {
-        return errorResult(`input_text failed (backend ${g.backend}): ${g.detail ?? "flow did not pass"}`);
+        return errorResult({ code: "failed", message: `input_text failed (backend ${g.backend}): ${g.detail ?? "flow did not pass"}`, remediation: "Tap the field first so it is focused, then retry. For WebView form fields native input does not fire React onChange -- use mobile-mcp mobile_type_keys.", suggestedTool: "tap_on({ udid, bundleId, text: <field label> })" });
       }
-      return okResult({ ok: true, text, submit: g.submit ?? false, backend: g.backend });
+      return okResult({ ok: true, text, submit: g.submit ?? false, backend: g.backend }, { next: ["Verify the value landed with assert_text or inspect_screen.", "WebView caveat: native inputText does NOT fire React onChange/onChangeText -- if this is a web form, use mobile-mcp mobile_type_keys instead."] });
     }
   );
 

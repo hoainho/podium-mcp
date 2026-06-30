@@ -1,0 +1,81 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as nativeLib from "../lib/native.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolResultLike } from "./decidability.js";
+
+/**
+ * Zero-inference agent (G006 empirical floor).
+ *
+ * A deliberately brain-dead driver: it NEVER reasons about the UI or the task.
+ * It reads ONLY the machine-readable envelope (status / error.candidates) and
+ * applies fixed rules. If such an agent completes a flow — including recovering
+ * from an ambiguous tap purely via the server's candidate list — then the
+ * server's guidance, not model intelligence, is what carries the flow. This is
+ * the strongest no-API empirical proxy for "any model, however weak, succeeds":
+ * it proves even an agent with zero inference does.
+ */
+type Handler = (a: Record<string, unknown>) => Promise<ToolResultLike>;
+
+interface Sc { status?: string; error?: { candidates?: Array<{ index: number }> } }
+
+async function zeroInferenceTap(handler: Handler, base: Record<string, unknown>) {
+  const log: Array<{ args: Record<string, unknown>; status?: string }> = [];
+  let args = { ...base };
+  for (let step = 0; step < 3; step++) {
+    const res = await handler(args);
+    const sc = (res.structuredContent ?? {}) as Sc;
+    log.push({ args, status: sc.status });
+    if (!res.isError && sc.status === "ok") return { ok: true, steps: step + 1, log };
+    if (res.isError && sc.status === "ambiguous") {
+      const cands = sc.error?.candidates ?? [];
+      if (cands.length === 0) return { ok: false, reason: "ambiguous w/o candidates", log };
+      args = { ...base, index: cands[0].index }; // fixed rule: take first candidate's index
+      continue;
+    }
+    return { ok: false, reason: `unhandled status ${sc.status}`, log };
+  }
+  return { ok: false, reason: "exceeded steps", log };
+}
+
+async function tapHandler(): Promise<Handler> {
+  const { registerScreenTools } = await import("../tools/screen.js");
+  const handlers = new Map<string, Handler>();
+  const fake = { tool(n: string, _d: string, _s: unknown, h: Handler) { handlers.set(n, h); } };
+  registerScreenTools(fake as unknown as McpServer);
+  return handlers.get("tap_on")!;
+}
+
+const OK = { code: 0, stdout: "", stderr: "" };
+const el = (y: number) => ({ label: "Login", frame: { x: 0, y, width: 10, height: 10 } });
+
+describe("zero-inference agent completes Flow A purely from the envelope (G006 empirical floor)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("recovers from an AMBIGUOUS tap and succeeds in 2 steps — no UI reasoning", async () => {
+    vi.spyOn(nativeLib, "getBackend").mockResolvedValue({
+      name: "idb",
+      describeAll: vi.fn(async () => [el(0), el(100)]), // 2 matches -> ambiguous on step 1
+      tap: vi.fn(async () => OK),
+    } as unknown as Awaited<ReturnType<typeof nativeLib.getBackend>>);
+
+    const handler = await tapHandler();
+    const out = await zeroInferenceTap(handler, { udid: "U", bundleId: "c", text: "Login" });
+
+    expect(out.ok).toBe(true);
+    expect(out.steps).toBe(2);
+    expect(out.log[0].status).toBe("ambiguous"); // step 1 fails closed
+    expect(out.log[1].args.index).toBe(0);        // step 2 driven SOLELY by candidates
+    expect(out.log[1].status).toBe("ok");
+  });
+
+  it("a single unambiguous match succeeds in 1 step", async () => {
+    vi.spyOn(nativeLib, "getBackend").mockResolvedValue({
+      name: "idb",
+      describeAll: vi.fn(async () => [el(0)]),
+      tap: vi.fn(async () => OK),
+    } as unknown as Awaited<ReturnType<typeof nativeLib.getBackend>>);
+    const handler = await tapHandler();
+    const out = await zeroInferenceTap(handler, { udid: "U", bundleId: "c", text: "Login" });
+    expect(out).toMatchObject({ ok: true, steps: 1 });
+  });
+});

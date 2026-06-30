@@ -1,7 +1,7 @@
 {
   "name": "podium-mcp",
   "mcpName": "io.github.hoainho/podium-mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Mobile + canvas automation MCP for AI agents — one stdio server, 51 tools: iOS (simulator + real) & Android control, native UI automation, Maestro E2E flows, evidenced oracle-ladder assertions, React Native/Metro debugging, WebView DOM + network capture, and a no-vision canvas/WebGL brain (Pixi/Konva/Fabric/Phaser/Three/Babylon) that drives game UIs like DOM elements — ~5x fewer tokens than screenshot/vision loops.",
   "type": "module",
   "license": "MIT",
@@ -36,7 +36,9 @@
     "start": "node dist/index.js",
     "benchmark": "npm run build && node --experimental-strip-types scripts/benchmark.ts",
     "token-bench": "node scripts/token-bench.mjs",
-    "test:canvas": "vitest run --config vitest.canvas.config.ts"
+    "test:canvas": "vitest run --config vitest.canvas.config.ts",
+    "record-demo": "node scripts/record-demo.mjs",
+    "eval:model-agnostic": "vitest run src/eval/decidability.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -44,13 +46,16 @@
     "zod": "^3.24.4"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.1",
     "@types/node": "^22.15.21",
     "babylonjs": "^7.54.3",
     "fabric": "^5.5.2",
+    "gif-encoder-2": "^1.0.5",
     "konva": "^9.3.22",
     "phaser": "^3.90.0",
     "pixi.js": "^7.4.3",
     "playwright": "^1.61.1",
+    "pngjs": "^7.0.0",
     "three": "^0.149.0",
     "typescript": "^5.8.3",
     "vitest": "^3.2.6"
