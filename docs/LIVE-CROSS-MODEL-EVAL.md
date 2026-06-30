@@ -50,3 +50,28 @@ Running real models against a booted simulator costs API tokens and needs a GUI
 simulator — unsuitable for a headless CI gate. The decidability eval is the CI proxy;
 this runbook is the periodic empirical confirmation (run before a release that claims
 model-agnosticism).
+
+---
+
+## Executed: server e2e on a real booted simulator (2026-06-30)
+
+Ran the canonical decision points against the ACTUAL built server (`dist/`) on a
+**real booted iOS simulator** (iPhone 16, iOS 18.5) via the bundled **mobilecli**
+native backend (no idb / no Maestro needed). This is a live run, not mocked:
+
+| Step | Tool (real sim) | Envelope observed | Result |
+|---|---|---|---|
+| 1 | `inspect_screen` (Settings) | `status:"ok"`, 48 real nodes | ✅ |
+| 2 | `tap_on("General")` | `status:"ok"` + `next[]` (verify-the-tap guidance) | ✅ tapped |
+| 3 | `inspect_screen` (re-read) | `status:"ok"`, 36 nodes — **screen changed 48→36** | ✅ navigation confirmed |
+| 4 | `tap_on("NoSuchElementZZZ123")` | `isError`, `status:"failed"`, `remediation`, `suggestedTool: inspect_screen({udid})` | ✅ actionable error |
+| 5 | `assert_visible` | fail-closed structured failure (no false pass) | ✅ |
+
+**Conclusion:** the model-agnostic envelope (machine-readable `status`, `next[]`,
+structured errors with `remediation`/`suggestedTool`) is confirmed working **in
+practice on a real device** — a caller is told the state and the next action at
+every step without inference.
+
+**Still open:** the opus-vs-haiku *model-parity* comparison (two live model loops
+driving these flows) per the protocol above — needs API budget for both tiers.
+The server-side e2e (this section) is the prerequisite that is now satisfied.
