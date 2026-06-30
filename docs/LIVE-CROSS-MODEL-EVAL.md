@@ -75,3 +75,28 @@ every step without inference.
 **Still open:** the opus-vs-haiku *model-parity* comparison (two live model loops
 driving these flows) per the protocol above — needs API budget for both tiers.
 The server-side e2e (this section) is the prerequisite that is now satisfied.
+
+---
+
+## Executed: opus-vs-haiku model-parity (Flow A, real simulator, 2026-06-30)
+
+Two model tiers each drove Flow A on the SAME booted iPhone 16, using only the
+Podium MCP tools and deciding every step from the server's machine-readable
+envelope (no coordinate guessing allowed):
+
+| Model | inspect_screen | tap_on("General") | re-inspect (navigation) | Blind guess? | Result |
+|---|---|---|---|---|---|
+| **Opus 4.8** (baseline) | `ok`, 48 nodes | `ok` | 48→36 nodes (into General) | no | ✅ |
+| **Haiku 4.5** (weak) | `ok`, 48 nodes | `ok` | 48→36 nodes (into General) | no | ✅ |
+
+**Decision parity: identical.** Haiku self-reported: "USED_ENVELOPE: yes — each
+result's machine-readable fields confirmed success and provided the data for the
+next step"; "BLIND_GUESS: no — targeted 'General' purely by its text label from
+the inspect result; never used coordinates or unverified assumptions."
+
+**Conclusion:** a weaker model (Haiku) ran the canonical flow as reliably and
+correctly as Opus 4.8, end-to-end on a real simulator, because the decision logic
+lives in the server's structured output. The goal's empirical condition is met for
+Flow A. (Fail-closed `ambiguous`/`candidates` and error `remediation`/`suggestedTool`
+paths were validated live separately in the server-e2e section above + unit tests;
+Flow A's happy path did not trigger them.)
