@@ -188,9 +188,9 @@ export function createWebviewEngineTransport(
   return {
     async send(command) {
       const cmdJson = JSON.stringify(command);
-      const expr = `JSON.stringify((window.__podiumEngine||function(){throw new Error("no __podiumEngine bridge on this WebGL page")})(${JSON.stringify(
+      const expr = `(async()=>JSON.stringify(await (window.__podiumEngine||function(){throw new Error("no __podiumEngine bridge on this WebGL page")})(${JSON.stringify(
         cmdJson
-      )}))`;
+      )}))()`;
       let raw: string;
       try {
         raw = await evalJs(expr);
@@ -209,4 +209,42 @@ export function createWebviewEngineTransport(
       /* CDP eval is stateless — nothing to close. */
     },
   };
+}
+
+/**
+ * Build a page-side helper for Unity WebGL builds that include a small C#
+ * bridge component. The helper adapts Unity's SendMessage callback style to the
+ * `window.__podiumEngine(commandJsonString) -> Promise<EngineResponse>`
+ * contract consumed by createWebviewEngineTransport().
+ *
+ * The Unity component receives `{ id, command }` JSON and should respond by
+ * calling `window.__podiumUnityBridge.respond(id, response)`.
+ */
+export function buildUnityWebGLBridgeScript(options?: {
+  gameObject?: string;
+  method?: string;
+  timeoutMs?: number;
+}): string {
+  const gameObject = options?.gameObject ?? "PodiumBridge";
+  const method = options?.method ?? "HandleCommand";
+  const timeoutMs = options?.timeoutMs ?? 5_000;
+  return (
+    ";(function(){var cfg={gameObject:" +
+    JSON.stringify(gameObject) +
+    ",method:" +
+    JSON.stringify(method) +
+    ",timeoutMs:" +
+    JSON.stringify(timeoutMs) +
+    "};function unity(){return (window.unityInstance&&window.unityInstance.SendMessage&&window.unityInstance)||" +
+    "(window.gameInstance&&window.gameInstance.SendMessage&&window.gameInstance)||" +
+    "(window.Module&&window.Module.unityInstance&&window.Module.unityInstance.SendMessage&&window.Module.unityInstance)||null;}" +
+    "var bridge=window.__podiumUnityBridge||{};bridge._pending=bridge._pending||{};" +
+    "bridge.respond=function(id,response){var p=bridge._pending[id];if(!p)return;delete bridge._pending[id];clearTimeout(p.timer);p.resolve(response);};" +
+    "bridge.send=function(command){var u=unity();if(!u)return Promise.resolve({error:{type:'BridgeUnavailable',message:'Unity WebGL instance with SendMessage was not found'}});" +
+    "var id=String(Date.now())+'-'+Math.random().toString(36).slice(2);var payload=JSON.stringify({id:id,command:command});" +
+    "return new Promise(function(resolve){var timer=setTimeout(function(){delete bridge._pending[id];resolve({error:{type:'Timeout',message:'Unity bridge did not respond within '+cfg.timeoutMs+'ms'}});},cfg.timeoutMs);" +
+    "bridge._pending[id]={resolve:resolve,timer:timer};try{u.SendMessage(cfg.gameObject,cfg.method,payload);}catch(e){delete bridge._pending[id];clearTimeout(timer);resolve({error:{type:'SendMessageError',message:e&&e.message?e.message:String(e)}});}});};" +
+    "window.__podiumUnityBridge=bridge;window.__podiumEngine=function(commandJson){var command=typeof commandJson==='string'?JSON.parse(commandJson):commandJson;return bridge.send(command);};" +
+    "return window.__podiumUnityBridge;})();"
+  );
 }

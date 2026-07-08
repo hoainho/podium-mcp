@@ -20,6 +20,7 @@ export type CanvasFramework =
   | "phaser"
   | "three"
   | "babylon"
+  | "unity-webgl"
   | "a11y"
   | "vision"
   | "unknown";

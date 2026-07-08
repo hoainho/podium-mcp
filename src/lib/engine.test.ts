@@ -6,6 +6,7 @@ import {
   parseEngineObjects,
   forwardEnginePort,
   createWebviewEngineTransport,
+  buildUnityWebGLBridgeScript,
   type EngineTransport,
   type EngineResponse,
 } from "./engine.js";
@@ -120,6 +121,7 @@ describe("createWebviewEngineTransport (WebGL-in-WebView)", () => {
     const objs = await new EngineClient(createWebviewEngineTransport(evalJs)).findObjects("path", "Canvas/Play");
     expect(objs).toEqual([{ name: "Canvas/Play", id: 3, x: 200, y: 400 }]);
     expect(calls[0]).toContain("__podiumEngine");
+    expect(calls[0]).toContain("async");
   });
 
   it("fails closed (EngineError) when the bridge returns non-JSON", async () => {
@@ -134,5 +136,29 @@ describe("createWebviewEngineTransport (WebGL-in-WebView)", () => {
       })
     );
     await expect(client.findObjects("name", "X")).rejects.toBeInstanceOf(EngineError);
+  });
+});
+
+describe("buildUnityWebGLBridgeScript", () => {
+  it("installs the Unity bridge and __podiumEngine adapter", () => {
+    const src = buildUnityWebGLBridgeScript();
+    expect(src).toContain("__podiumUnityBridge");
+    expect(src).toContain("__podiumEngine");
+    expect(src).toContain("SendMessage");
+    expect(src).toContain("PodiumBridge");
+    expect(src).toContain("HandleCommand");
+  });
+
+  it("allows the Unity GameObject, method, and timeout to be customized", () => {
+    const src = buildUnityWebGLBridgeScript({ gameObject: "AutomationBridge", method: "Dispatch", timeoutMs: 1234 });
+    expect(src).toContain("AutomationBridge");
+    expect(src).toContain("Dispatch");
+    expect(src).toContain("1234");
+  });
+
+  it("parses as valid JS and is safe to embed in eval payloads", () => {
+    const src = buildUnityWebGLBridgeScript();
+    expect(() => new Function(src)).not.toThrow();
+    expect(JSON.parse(JSON.stringify(src))).toBe(src);
   });
 });

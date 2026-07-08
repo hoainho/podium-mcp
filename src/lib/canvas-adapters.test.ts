@@ -105,7 +105,7 @@ describe("buildCanvasBridgeScript", () => {
 
   it("contains the per-framework detection tokens", () => {
     const src = buildCanvasBridgeScript();
-    for (const token of ["__PIXI_APP__", "Konva", "Fabric", "Phaser", "game", "scene", "BABYLON"]) {
+    for (const token of ["__PIXI_APP__", "Konva", "Fabric", "Phaser", "game", "scene", "BABYLON", "unityInstance", "createUnityInstance"]) {
       expect(src).toContain(token);
     }
   });

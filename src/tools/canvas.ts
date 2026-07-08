@@ -3,7 +3,7 @@
  * UIs hosted in an inspectable WKWebView.
  *
  * A `<canvas>` is opaque to the DOM, but most JS canvas/WebGL apps keep a live
- * scene graph (Pixi/Konva/Fabric/Phaser/Three/Babylon). These tools inject the
+ * scene graph (Pixi/Konva/Fabric/Phaser/Three/Babylon/Unity WebGL). These tools inject the
  * `canvas-adapters` bridge into the page (one eval), read that scene graph as
  * tap-ready `CanvasObject[]`, and — for `canvas_tap` — resolve a fuzzy intent
  * ("close") to a single target and tap it at absolute screen coordinates.
@@ -36,7 +36,7 @@ const SELECTOR = z.enum(["name", "id", "text", "type", "role", "path"]);
 
 const CANVAS_NOTE =
   " Requires an inspectable WKWebView (isInspectable=true; debug/staging) hosting a " +
-  "canvas/WebGL framework (Pixi/Konva/Fabric/Phaser/Three/Babylon) with its root reachable " +
+  "canvas/WebGL framework (Pixi/Konva/Fabric/Phaser/Three/Babylon/Unity WebGL) with its root reachable " +
   "(commonly on window, or Pixi's __PIXI_APP__). NO screenshots/vision — fails closed otherwise.";
 
 const EVAL_DISABLED =
@@ -116,9 +116,11 @@ async function inspectCanvasSurface(
 /** Shared "no objects" hint so a bare-canvas page gives an actionable message. */
 function emptyHint(framework: string): string {
   return framework === "unknown"
-    ? "no canvas framework detected on the page (looked for Pixi/Konva/Fabric/Phaser/Three/Babylon). " +
+    ? "no canvas framework detected on the page (looked for Pixi/Konva/Fabric/Phaser/Three/Babylon/Unity WebGL). " +
         "Expose the framework root on window (e.g. window.app / window.stage / window.scene), or use a " +
         "screenshot + tap_with_fallback for a fully opaque canvas."
+    : framework === "unity-webgl"
+      ? "Unity WebGL detected, but Unity does not expose a JS scene graph by default. Install the Unity WebGL engine bridge helper and a matching C# PodiumBridge component, then use the engine_* tools."
     : `the ${framework} scene graph reported no addressable objects.`;
 }
 
@@ -126,7 +128,7 @@ export function registerCanvasTools(server: McpServer): void {
   // ─── canvas_inspect ──────────────────────────────────────────────────────────
   server.tool(
     "canvas_inspect",
-    "Lists canvas/WebGL objects (Pixi/Konva/Fabric/Phaser/Three/Babylon) as DOM-like elements with " +
+    "Lists canvas/WebGL objects (Pixi/Konva/Fabric/Phaser/Three/Babylon/Unity WebGL) as DOM-like elements with " +
       "tap-ready coordinates — NO screenshot/vision. Optionally filter by selector (name/id/text/type/role)." +
       CANVAS_NOTE,
     {
