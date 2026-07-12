@@ -161,4 +161,24 @@ describe("buildUnityWebGLBridgeScript", () => {
     expect(() => new Function(src)).not.toThrow();
     expect(JSON.parse(JSON.stringify(src))).toBe(src);
   });
+
+  it("parses stringified JSON responses from Unity callbacks", () => {
+    const src = buildUnityWebGLBridgeScript();
+    const installBridge = new Function("window", `${src}\nreturn window;`);
+    const mockWindow: any = {
+      unityInstance: {
+        SendMessage: () => {},
+      },
+    };
+
+    installBridge(mockWindow);
+
+    const resolve = vi.fn();
+    const timer = setTimeout(() => {}, 10_000);
+    mockWindow.__podiumUnityBridge._pending["test-id"] = { resolve, timer };
+
+    mockWindow.__podiumUnityBridge.respond("test-id", '{"data":[{"id":1}]}');
+
+    expect(resolve).toHaveBeenCalledWith({ data: [{ id: 1 }] });
+  });
 });

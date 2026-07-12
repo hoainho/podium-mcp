@@ -239,7 +239,7 @@ export function buildUnityWebGLBridgeScript(options?: {
     "(window.gameInstance&&window.gameInstance.SendMessage&&window.gameInstance)||" +
     "(window.Module&&window.Module.unityInstance&&window.Module.unityInstance.SendMessage&&window.Module.unityInstance)||null;}" +
     "var bridge=window.__podiumUnityBridge||{};bridge._pending=bridge._pending||{};" +
-    "bridge.respond=function(id,response){var p=bridge._pending[id];if(!p)return;delete bridge._pending[id];clearTimeout(p.timer);p.resolve(response);};" +
+    "bridge.respond=function(id,response){var p=bridge._pending[id];if(!p)return;delete bridge._pending[id];clearTimeout(p.timer);var res=response;if(typeof response==='string'){try{res=JSON.parse(response);}catch(_){}}p.resolve(res);};" +
     "bridge.send=function(command){var u=unity();if(!u)return Promise.resolve({error:{type:'BridgeUnavailable',message:'Unity WebGL instance with SendMessage was not found'}});" +
     "var id=String(Date.now())+'-'+Math.random().toString(36).slice(2);var payload=JSON.stringify({id:id,command:command});" +
     "return new Promise(function(resolve){var timer=setTimeout(function(){delete bridge._pending[id];resolve({error:{type:'Timeout',message:'Unity bridge did not respond within '+cfg.timeoutMs+'ms'}});},cfg.timeoutMs);" +
