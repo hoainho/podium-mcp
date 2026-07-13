@@ -435,7 +435,7 @@ function unityInstance() {
 }
 function inspectUnityWebGL() {
   var instance = unityInstance();
-  if (!instance && typeof window.createUnityInstance !== "function" && !(window.Module && window.Module.canvas)) return null;
+  if (!instance && typeof window.createUnityInstance !== "function") return null;
   return [];
 }
 

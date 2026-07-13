@@ -110,6 +110,14 @@ describe("buildCanvasBridgeScript", () => {
     }
   });
 
+  it("does not classify generic Emscripten Module.canvas pages as Unity WebGL", () => {
+    const src = buildCanvasBridgeScript();
+    const window = { Module: { canvas: {} } };
+    const install = new Function("window", src + "\nreturn window.__podiumCanvas.inspect();");
+
+    expect(install(window)).toEqual({ framework: "unknown", objects: [] });
+  });
+
   it("exposes the inspect/hitTest/objectRect surface", () => {
     const src = buildCanvasBridgeScript();
     expect(src).toContain("inspect");

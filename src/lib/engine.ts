@@ -190,7 +190,7 @@ export function createWebviewEngineTransport(
       const cmdJson = JSON.stringify(command);
       const expr = `(async()=>JSON.stringify(await (window.__podiumEngine||function(){throw new Error("no __podiumEngine bridge on this WebGL page")})(${JSON.stringify(
         cmdJson
-      )}))()`;
+      )})))()`;
       let raw: string;
       try {
         raw = await evalJs(expr);

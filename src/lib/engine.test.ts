@@ -122,6 +122,7 @@ describe("createWebviewEngineTransport (WebGL-in-WebView)", () => {
     expect(objs).toEqual([{ name: "Canvas/Play", id: 3, x: 200, y: 400 }]);
     expect(calls[0]).toContain("__podiumEngine");
     expect(calls[0]).toContain("async");
+    expect(() => new Function("return " + calls[0])).not.toThrow();
   });
 
   it("fails closed (EngineError) when the bridge returns non-JSON", async () => {
