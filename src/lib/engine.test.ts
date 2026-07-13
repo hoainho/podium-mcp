@@ -6,6 +6,7 @@ import {
   parseEngineObjects,
   forwardEnginePort,
   createWebviewEngineTransport,
+  buildUnityWebGLBridgeScript,
   type EngineTransport,
   type EngineResponse,
 } from "./engine.js";
@@ -120,6 +121,8 @@ describe("createWebviewEngineTransport (WebGL-in-WebView)", () => {
     const objs = await new EngineClient(createWebviewEngineTransport(evalJs)).findObjects("path", "Canvas/Play");
     expect(objs).toEqual([{ name: "Canvas/Play", id: 3, x: 200, y: 400 }]);
     expect(calls[0]).toContain("__podiumEngine");
+    expect(calls[0]).toContain("async");
+    expect(() => new Function("return " + calls[0])).not.toThrow();
   });
 
   it("fails closed (EngineError) when the bridge returns non-JSON", async () => {
@@ -134,5 +137,49 @@ describe("createWebviewEngineTransport (WebGL-in-WebView)", () => {
       })
     );
     await expect(client.findObjects("name", "X")).rejects.toBeInstanceOf(EngineError);
+  });
+});
+
+describe("buildUnityWebGLBridgeScript", () => {
+  it("installs the Unity bridge and __podiumEngine adapter", () => {
+    const src = buildUnityWebGLBridgeScript();
+    expect(src).toContain("__podiumUnityBridge");
+    expect(src).toContain("__podiumEngine");
+    expect(src).toContain("SendMessage");
+    expect(src).toContain("PodiumBridge");
+    expect(src).toContain("HandleCommand");
+  });
+
+  it("allows the Unity GameObject, method, and timeout to be customized", () => {
+    const src = buildUnityWebGLBridgeScript({ gameObject: "AutomationBridge", method: "Dispatch", timeoutMs: 1234 });
+    expect(src).toContain("AutomationBridge");
+    expect(src).toContain("Dispatch");
+    expect(src).toContain("1234");
+  });
+
+  it("parses as valid JS and is safe to embed in eval payloads", () => {
+    const src = buildUnityWebGLBridgeScript();
+    expect(() => new Function(src)).not.toThrow();
+    expect(JSON.parse(JSON.stringify(src))).toBe(src);
+  });
+
+  it("parses stringified JSON responses from Unity callbacks", () => {
+    const src = buildUnityWebGLBridgeScript();
+    const installBridge = new Function("window", `${src}\nreturn window;`);
+    const mockWindow: any = {
+      unityInstance: {
+        SendMessage: () => {},
+      },
+    };
+
+    installBridge(mockWindow);
+
+    const resolve = vi.fn();
+    const timer = setTimeout(() => {}, 10_000);
+    mockWindow.__podiumUnityBridge._pending["test-id"] = { resolve, timer };
+
+    mockWindow.__podiumUnityBridge.respond("test-id", '{"data":[{"id":1}]}');
+
+    expect(resolve).toHaveBeenCalledWith({ data: [{ id: 1 }] });
   });
 });

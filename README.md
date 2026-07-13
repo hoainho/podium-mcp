@@ -236,7 +236,7 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 | `engine_swipe` | udid, fromX/Y, toX/Y, durationMs? | AltTester / CDP | Swipe inside the engine view |
 | `engine_call` | udid, by?, value, component, method, parameters? | AltTester / CDP | Invokes a C# component method by reflection (the engine analog of a DOM event handler) |
 
-> **Status: experimental.** The wire shapes are unit-tested against mocks; the AltTester path has **not yet been validated against a live Unity build** (`engine-smoke` skips until an instrumented build is provided), and Unity-WebGL needs the app to expose `window.__podiumEngine`. Engine tools require an **AltTester-instrumented build** (dev/staging) or that WebGL bridge; on a non-instrumented build they **fail closed** with an actionable error — never a vision fallback. For canvas/WebGL apps using a JS framework, the **canvas brain below is the validated path**.
+> **Status: experimental.** The wire shapes are unit-tested against mocks; the AltTester path has **not yet been validated against a live Unity build** (`engine-smoke` skips until an instrumented build is provided). Unity-WebGL pages are auto-detected by the canvas bridge, and `buildUnityWebGLBridgeScript()` installs a drop-in `window.__podiumEngine` adapter for builds with a small C# `PodiumBridge` component. Engine tools require an **AltTester-instrumented build** (dev/staging) or that WebGL bridge; on a non-instrumented build they **fail closed** with an actionable error — never a vision fallback. For canvas/WebGL apps using a JS framework, the **canvas brain below is the validated path**.
 
 ### Canvas brain — Pixi/Konva/Fabric/Phaser/Three/Babylon, no vision (3)
 
@@ -380,7 +380,7 @@ For an RN shell that hosts its UI in a WebView, the app's API calls run in the w
 
 ## Documented limits (by design, not bugs)
 
-- **Canvas/WebGL needs a cooperating JS framework** — the canvas brain automates Pixi/Konva/Fabric/Phaser/Three/Babylon UIs by selector **when the app exposes its scene-graph root** (validated live). A raw/custom WebGL canvas, an opaque/production build, or **Unity without an AltTester / `window.__podiumEngine` bridge** is **not** selector-addressable — fall back to `tap_with_fallback` with screenshot-derived coordinates, or instrument the build.
+- **Canvas/WebGL needs a cooperating JS framework or bridge** — the canvas brain automates Pixi/Konva/Fabric/Phaser/Three/Babylon UIs by selector **when the app exposes its scene-graph root** (validated live). Unity-WebGL is detected separately and should use `buildUnityWebGLBridgeScript()` plus a C# `PodiumBridge` component to expose `window.__podiumEngine`. A raw/custom WebGL canvas, an opaque/production build, or **Unity without an AltTester / `window.__podiumEngine` bridge** is **not** selector-addressable — fall back to `tap_with_fallback` with screenshot-derived coordinates, or instrument the build.
 - **WebView tools are dev/QA only** — production App Store builds typically set `isInspectable = false`; tools return an actionable error and fall back to coordinate taps.
 - **WebView content-process memory is unreadable** from the app sandbox (platform limit) — use indirect signals (memory warnings, process terminations).
 - **Maestro `text:` matcher is full-string regex (IGNORE_CASE)** — partial strings don't match; copy hierarchy `text` verbatim or anchor with `.*`.
@@ -459,7 +459,7 @@ podium-mcp is production-ready for **iOS/Android UI automation** and **no-vision
 **High-impact** — [`help wanted`](https://github.com/hoainho/podium-mcp/labels/help%20wanted)
 - [#1](https://github.com/hoainho/podium-mcp/issues/1) — validate the AltTester/Unity engine path against a **live instrumented Unity build** (the biggest gap to real Unity automation).
 - [#2](https://github.com/hoainho/podium-mcp/issues/2) — **real-device WKWebView e2e** for the canvas brain (today validated in Playwright WebKit).
-- [#3](https://github.com/hoainho/podium-mcp/issues/3) — **Unity-WebGL adapter**: auto-detect + a drop-in `window.__podiumEngine` bridge.
+- [#3](https://github.com/hoainho/podium-mcp/issues/3) — **Unity-WebGL adapter**: auto-detect + a drop-in `window.__podiumEngine` bridge helper.
 
 **Good first issues** — [`good first issue`](https://github.com/hoainho/podium-mcp/labels/good%20first%20issue)
 - [#4](https://github.com/hoainho/podium-mcp/issues/4) — more canvas adapters (PlayCanvas, Cocos Creator, p5.js).

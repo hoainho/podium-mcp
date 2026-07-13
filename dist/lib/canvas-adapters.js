@@ -5,6 +5,7 @@ function isCanvasFramework(value) {
         value === "phaser" ||
         value === "three" ||
         value === "babylon" ||
+        value === "unity-webgl" ||
         value === "a11y" ||
         value === "vision" ||
         value === "unknown");
@@ -392,6 +393,21 @@ function inspectBabylon() {
   return out;
 }
 
+// ---- Unity WebGL --------------------------------------------------------
+function unityInstance() {
+  if (window.unityInstance && typeof window.unityInstance.SendMessage === "function") return window.unityInstance;
+  if (window.gameInstance && typeof window.gameInstance.SendMessage === "function") return window.gameInstance;
+  if (window.Module && window.Module.unityInstance && typeof window.Module.unityInstance.SendMessage === "function") {
+    return window.Module.unityInstance;
+  }
+  return null;
+}
+function inspectUnityWebGL() {
+  var instance = unityInstance();
+  if (!instance && typeof window.createUnityInstance !== "function") return null;
+  return [];
+}
+
 // ---- Detection + dispatch ----------------------------------------------
 var ADAPTERS = [
   { name: "pixi", run: inspectPixi },
@@ -399,7 +415,8 @@ var ADAPTERS = [
   { name: "fabric", run: inspectFabric },
   { name: "phaser", run: inspectPhaser },
   { name: "three", run: inspectThree },
-  { name: "babylon", run: inspectBabylon }
+  { name: "babylon", run: inspectBabylon },
+  { name: "unity-webgl", run: inspectUnityWebGL }
 ];
 
 function detect() {
