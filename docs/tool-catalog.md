@@ -59,6 +59,23 @@ restarting** and sequential interactions preserve state.
 | `press_key` | udid, bundleId, key | ephemeral `pressKey` | back/power/tab are Android-only |
 | `orientation_set` | udid, bundleId, value | ephemeral `setOrientation` | PORTRAIT / LANDSCAPE_LEFT / LANDSCAPE_RIGHT / UPSIDE_DOWN |
 
+## Canvas brain (inspectable WebView)
+
+Coordinates passed to `canvas_hittest` and returned as `rect` by
+`canvas_object_rect` are CSS pixels relative to the canvas element's top-left.
+`screenX`/`screenY` and `screenRect` include the canvas and WebView offsets and
+are absolute screen coordinates. A missed query returns `null`; unavailable
+WebViews or malformed bridge results return a structured tool error. Both tools
+honor `PODIUM_DISABLE_WEBVIEW_EVAL=1` and never tap.
+
+| Tool | Params | Backing engine | Returns / behavior |
+|---|---|---|---|
+| `canvas_inspect` | udid, by?, value?, webviewId? | scene-graph bridge | Lists canvas objects and CSS-pixel centers |
+| `canvas_resolve` | udid, intent, webviewId? | bridge + semantic resolver | Ranked candidates and a fail-closed confidence flag |
+| `canvas_tap` | udid, intent, bundleId?, webviewId? | resolver + native tap | Taps only a confident match at screen coordinates |
+| `canvas_hittest` | udid, x, y, webviewId? | bridge `hitTest` | Topmost object at canvas-local x/y, queried screen point, or `hit: null` |
+| `canvas_object_rect` | udid, name, webviewId? | bridge `objectRect` | Canvas-local `rect` and absolute `screenRect`, or `rect: null` |
+
 ## Flows (end-to-end)
 
 | Tool | Params | Backing engine | Returns / behavior |

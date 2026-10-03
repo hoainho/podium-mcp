@@ -42,7 +42,7 @@ function isCanvasFramework(value: unknown): value is CanvasFramework {
 }
 
 /** A rect normalizes only when all four components are finite numbers. */
-function parseRect(raw: unknown): CanvasRect | undefined {
+export function parseCanvasRect(raw: unknown): CanvasRect | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
   const x = Number(r.x);
@@ -82,7 +82,7 @@ export function parseCanvasObjects(raw: unknown): CanvasObject[] {
 
     const idIsString = typeof rec.id === "string";
     const idIsNumber = typeof rec.id === "number" && Number.isFinite(rec.id);
-    const bbox = parseRect(rec.bbox);
+    const bbox = parseCanvasRect(rec.bbox);
 
     const obj: CanvasObject = {
       name: typeof rec.name === "string" ? rec.name : "",

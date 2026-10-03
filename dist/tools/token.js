@@ -17,7 +17,7 @@ import { okResult } from "../lib/result.js";
 import { estimateTokens, estimateImageTokens, measureToolDefs, compareFlows, } from "../lib/token-report.js";
 /** A representative sample of Podium tool defs, used to estimate the average
  *  per-tool schema cost; scaled to the full tool count for the overhead figure.
- *  (Sampling avoids hand-transcribing all ~51 schemas while staying honest:
+ *  (Sampling avoids hand-transcribing all ~53 schemas while staying honest:
  *  the average is measured from real shapes, not invented.) */
 const SAMPLE_TOOLS = [
     {
@@ -56,13 +56,13 @@ export function registerTokenTools(server) {
         screenshotWidth: z.number().int().positive().optional().describe("Vision-loop screenshot width px (default 1179)"),
         screenshotHeight: z.number().int().positive().optional().describe("Vision-loop screenshot height px (default 2556)"),
         elementsPerStep: z.number().int().min(1).max(500).optional().describe("Structured elements returned per step (default 20)"),
-        toolCount: z.number().int().min(1).max(500).optional().describe("Registered tool count for the overhead estimate (default 51)"),
+        toolCount: z.number().int().min(1).max(500).optional().describe("Registered tool count for the overhead estimate (default 53)"),
     }, async ({ steps, screenshotWidth, screenshotHeight, elementsPerStep, toolCount }) => {
         const n = steps ?? 8;
         const w = screenshotWidth ?? 1179;
         const h = screenshotHeight ?? 2556;
         const els = elementsPerStep ?? 20;
-        const tools = toolCount ?? 51;
+        const tools = toolCount ?? 53;
         // Equivalent flows: each step is either a structured element list (Podium)
         // or a screenshot + a short reasoning prompt (vision loop).
         const noVision = Array.from({ length: n }, () => ({ kind: "text", text: structuredStep(els) }));

@@ -4,7 +4,7 @@
 
 **One baton. Every instrument.**
 
-A single MCP stdio endpoint with **51 tools** for **iOS (simulator + real) and Android** device control, native UI automation, end-to-end flows, trustworthy assertions, React Native debugging, **WebView DOM + network inspection**, and a **no-vision canvas/WebGL brain** for Pixi/Konva/Fabric/Phaser/Three/Babylon (validated live in WebKit) — plus an **experimental** engine bridge for instrumented Unity/GL builds (AltTester) — one connection instead of half a dozen servers.
+A single MCP stdio endpoint with **53 tools** for **iOS (simulator + real) and Android** device control, native UI automation, end-to-end flows, trustworthy assertions, React Native debugging, **WebView DOM + network inspection**, and a **no-vision canvas/WebGL brain** for Pixi/Konva/Fabric/Phaser/Three/Babylon (validated live in WebKit) — plus an **experimental** engine bridge for instrumented Unity/GL builds (AltTester) — one connection instead of half a dozen servers.
 
 [![npm](https://img.shields.io/npm/v/podium-mcp?logo=npm&color=CB3837)](https://www.npmjs.com/package/podium-mcp)
 [![Glama](https://glama.ai/mcp/servers/hoainho/podium-mcp/badge)](https://glama.ai/mcp/servers/hoainho/podium-mcp)
@@ -12,10 +12,10 @@ A single MCP stdio endpoint with **51 tools** for **iOS (simulator + real) and A
 [![CI](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hoainho/podium-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[![tools 51](https://img.shields.io/badge/tools-51-7C3AED.svg)](#the-51-tools)
+[![tools 53](https://img.shields.io/badge/tools-53-7C3AED.svg)](#the-53-tools)
 [![tests 378](https://img.shields.io/badge/tests-378%20passing-brightgreen.svg)](#development--testing)
 [![tokens ~5x cheaper](https://img.shields.io/badge/tokens-~5x%20cheaper%20(no--vision)-2ea44f.svg)](#benchmarks)
-[![canvas 6 live engines](https://img.shields.io/badge/canvas-6%20live%20engines-2ea44f.svg)](#the-51-tools)
+[![canvas 6 live engines](https://img.shields.io/badge/canvas-6%20live%20engines-2ea44f.svg)](#the-53-tools)
 [![Node ≥22](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
 [![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![MCP stdio](https://img.shields.io/badge/MCP-stdio-7C3AED)](https://modelcontextprotocol.io)
@@ -52,7 +52,7 @@ Rather than wiring several MCP servers into every client config, `podium-mcp` ex
 - [Install](#install)
 - [Usage](#usage)
 - [Quick start](#quick-start-order-of-use)
-- [The 51 tools](#the-51-tools)
+- [The 53 tools](#the-53-tools)
 - [The oracle ladder — trustworthy assertions](#the-oracle-ladder--trustworthy-assertions)
 - [Native-first gesture backend](#native-first-gesture-backend)
 - [WebView & RN network introspection](#webview--rn-network-introspection)
@@ -102,12 +102,12 @@ Podium       ██████  3,117 tokens   (5.3× cheaper, −81%)
 ```
 
 The gap **compounds with every step** — a 30-step session runs roughly **62k vs
-12k** input tokens. On top of per-step cost, the full **51-tool schema travels
-with every request (~3,612 tokens, ~71/tool)**; Podium keeps tool descriptions
+12k** input tokens. On top of per-step cost, the full tool schema travels
+with every request (~71 tokens per tool in the v0.4.0 measurement); Podium keeps tool descriptions
 lean so the tool block never dominates the context window.
 
 For canvas / WebGL UIs the advantage is **structural**, not just cheaper:
-the [Canvas Brain](#the-51-tools) addresses objects by name and text, where a
+the [Canvas Brain](#the-53-tools) addresses objects by name and text, where a
 screenshot-only agent must re-analyze pixels on every frame.
 
 ### Speed — native-first gesture backend
@@ -122,7 +122,7 @@ per action (measured on a live iPhone 16 Pro simulator):
 
 ### One connection, not six
 
-All **51 tools** — device & app control, UI automation, declarative Maestro flows,
+All **53 tools** — device & app control, UI automation, declarative Maestro flows,
 evidenced assertions, WebView DOM + network capture, React Native / Metro
 debugging, and no-vision canvas/WebGL automation (plus an experimental engine bridge for instrumented Unity/GL) — sit behind a **single
 stdio endpoint**, replacing the usual stack of half a dozen separate MCP servers.
@@ -155,7 +155,7 @@ No manual config — one-time marketplace setup, then install:
 /plugin install podium-mcp@podium
 ```
 
-The plugin auto-starts the MCP server (all 51 tools) and ships five skills:
+The plugin auto-starts the MCP server (all 53 tools) and ships five skills:
 
 | Skill | Invoke | What it does |
 |---|---|---|
@@ -200,7 +200,7 @@ Register the built server with any MCP client. **Claude Code** (`.mcp.json`):
 }
 ```
 
-Quick manual smoke test over raw stdio (lists the 51 registered tools):
+Quick manual smoke test over raw stdio (lists the 53 registered tools):
 
 ```bash
 printf '%s\n' \
@@ -221,7 +221,7 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 6. **Inspect WebViews** — `webview_inspect` → tap coordinates, `webview_eval`, `webview_navigate`, `webview_network`.
 7. **Capture & debug** — `screenshot` / `record_start`→`record_stop`; `metro_logs` / `metro_network` / `metro_state`; `crash_list` / `crash_get`.
 
-## The 51 tools
+## The 53 tools
 
 > Every tool returns structured JSON and never throws — failures come back as MCP tool errors. See [`docs/tool-catalog.md`](docs/tool-catalog.md) for the authoritative per-parameter reference.
 >
@@ -238,15 +238,17 @@ Always call **`podium_health`** first to confirm which toolchain is available on
 
 > **Status: experimental.** The wire shapes are unit-tested against mocks; the AltTester path has **not yet been validated against a live Unity build** (`engine-smoke` skips until an instrumented build is provided), and Unity-WebGL needs the app to expose `window.__podiumEngine`. Engine tools require an **AltTester-instrumented build** (dev/staging) or that WebGL bridge; on a non-instrumented build they **fail closed** with an actionable error — never a vision fallback. For canvas/WebGL apps using a JS framework, the **canvas brain below is the validated path**.
 
-### Canvas brain — Pixi/Konva/Fabric/Phaser/Three/Babylon, no vision (3)
+### Canvas brain — Pixi/Konva/Fabric/Phaser/Three/Babylon, no vision (5)
 
 | Tool | Key params | Backing engine | Behavior |
 |---|---|---|---|
 | `canvas_inspect` | udid, by?, value?, webviewId? | injected scene-graph bridge (CDP eval) | Lists canvas objects with tap-ready CSS-px coords — **no screenshots** |
 | `canvas_resolve` | udid, intent, webviewId? | bridge + semantic resolver | Maps a fuzzy intent ("close", "✕") to a ranked, **evidenced** target; fail-closed `confidentEnough` |
 | `canvas_tap` | udid, intent, bundleId?, webviewId? | resolver + native tap | Resolves + taps the confident match at absolute screen coords (else fails closed) |
+| `canvas_hittest` | udid, x, y, webviewId? | injected scene-graph bridge (CDP eval) | Returns the topmost object at canvas-local CSS-pixel x/y and the queried screen point; never taps |
+| `canvas_object_rect` | udid, name, webviewId? | injected scene-graph bridge (CDP eval) | Returns a named object's canvas-local rectangle and absolute screen rectangle; never taps |
 
-> **Validated live:** all six frameworks pass a Playwright-WebKit (≈ WKWebView) suite at DPR 1 + 3 (`npm run test:canvas`, 19 tests). Canvas tools require an inspectable WKWebView hosting a supported framework with its root reachable (commonly on `window`, or Pixi's `__PIXI_APP__`). No framework / no inspectable WebView → **fails closed** with an actionable error — never a vision fallback.
+> **Validated live:** the scene-graph bridge passes a Playwright-WebKit (≈ WKWebView) suite across all six frameworks at DPR 1 + 3 (`npm run test:canvas`, 19 tests). The new query tools use that bridge and have unit tests; device verification remains to be done. Canvas tools require an inspectable WKWebView hosting a supported framework with its root reachable (commonly on `window`, or Pixi's `__PIXI_APP__`). No framework / no inspectable WebView → **fails closed** with an actionable error — never a vision fallback.
 
 ### Diagnostics (1)
 
@@ -486,7 +488,7 @@ versions are immutable.
 
 ## Design ideas
 
-- **One podium, one connection.** A single server fronts every mobile capability so an agent configures one endpoint and discovers all 51 tools at once.
+- **One podium, one connection.** A single server fronts every mobile capability so an agent configures one endpoint and discovers all 53 tools at once.
 - **Safe by construction.** Every external command runs through an `execFile` layer with an explicit argument array — never a shell string.
 - **Never crash the conductor.** Tools return structured results and errors instead of throwing; one bad call can't take the server down.
 - **Degrade, don't fail.** A missing toolchain (e.g. Android's `adb`) yields an informative result rather than a hard error.

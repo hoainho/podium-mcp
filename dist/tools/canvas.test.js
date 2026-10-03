@@ -22,7 +22,10 @@ const WV = {
     isVisible: true,
 };
 function bridgeDump(objects, framework = "pixi", canvasLeft = 0, canvasTop = 0) {
-    return JSON.stringify({ framework, objects, canvasLeft, canvasTop });
+    return queryDump({ framework, objects }, framework, canvasLeft, canvasTop);
+}
+function queryDump(value, framework = "pixi", canvasLeft = 0, canvasTop = 0) {
+    return JSON.stringify({ framework, value, canvasLeft, canvasTop });
 }
 function setup() {
     const { server, handlers } = fakeServer();
@@ -104,11 +107,62 @@ describe("canvas tools", () => {
         expect(res.content[0].text).toMatch(/not tapping|fail-closed/i);
         expect(tapSpy).not.toHaveBeenCalled();
     });
+    it("canvas_hittest queries the bridge and reports the hit at screen coordinates", async () => {
+        vi.spyOn(webview, "resolveWebview").mockResolvedValue({ ok: true, data: WV });
+        const evalSpy = vi.spyOn(webview, "evalWebview").mockResolvedValue({
+            ok: true,
+            data: queryDump({ name: "closeBtn", x: 20, y: 30, bbox: { x: 10, y: 20, width: 20, height: 20 } }, "pixi", 5, 100),
+        });
+        const out = payload(await setup().get("canvas_hittest")({ udid: "U", x: 19, y: 25 }));
+        expect(evalSpy).toHaveBeenCalledOnce();
+        expect(evalSpy.mock.calls[0][2]).toContain("window.__podiumCanvas.hitTest(19,25)");
+        expect(out).toMatchObject({ framework: "pixi", x: 19, y: 25, screenX: 24, screenY: 189 });
+        expect(out.hit).toMatchObject({ name: "closeBtn", source: "scene-graph" });
+    });
+    it("canvas_hittest returns null on a miss without tapping", async () => {
+        vi.spyOn(webview, "resolveWebview").mockResolvedValue({ ok: true, data: WV });
+        vi.spyOn(webview, "evalWebview").mockResolvedValue({ ok: true, data: queryDump(null, "unknown") });
+        const tapSpy = vi.spyOn(gesture, "nativeTap");
+        const out = payload(await setup().get("canvas_hittest")({ udid: "U", x: 10, y: 20 }));
+        expect(out.hit).toBeNull();
+        expect(String(out.hint)).toMatch(/no canvas framework/i);
+        expect(tapSpy).not.toHaveBeenCalled();
+    });
+    it("canvas_object_rect reports canvas-local and screen rectangles", async () => {
+        vi.spyOn(webview, "resolveWebview").mockResolvedValue({ ok: true, data: WV });
+        const evalSpy = vi.spyOn(webview, "evalWebview").mockResolvedValue({
+            ok: true,
+            data: queryDump({ x: 10, y: 20, width: 30, height: 40 }, "three", 5, 100),
+        });
+        const out = payload(await setup().get("canvas_object_rect")({ udid: "U", name: 'menu"Close' }));
+        expect(evalSpy.mock.calls[0][2]).toContain('window.__podiumCanvas.objectRect("menu\\"Close")');
+        expect(out.rect).toEqual({ x: 10, y: 20, width: 30, height: 40 });
+        expect(out.screenRect).toEqual({ x: 15, y: 184, width: 30, height: 40 });
+    });
+    it("canvas_object_rect returns a miss and rejects malformed bridge geometry", async () => {
+        vi.spyOn(webview, "resolveWebview").mockResolvedValue({ ok: true, data: WV });
+        const evalSpy = vi.spyOn(webview, "evalWebview").mockResolvedValue({ ok: true, data: queryDump(null) });
+        const handler = setup().get("canvas_object_rect");
+        const miss = payload(await handler({ udid: "U", name: "missing" }));
+        expect(miss.rect).toBeNull();
+        expect(miss.screenRect).toBeNull();
+        evalSpy.mockResolvedValue({ ok: true, data: queryDump({ x: 1, y: 2, width: "bad", height: 4 }) });
+        const invalid = await handler({ udid: "U", name: "broken" });
+        expect(invalid.isError).toBe(true);
+        expect(invalid.content[0].text).toMatch(/invalid rectangle/i);
+    });
     it("canvas tools respect the eval lockdown", async () => {
         process.env.PODIUM_DISABLE_WEBVIEW_EVAL = "1";
-        const res = await setup().get("canvas_inspect")({ udid: "U" });
-        expect(res.isError).toBe(true);
-        expect(res.content[0].text).toMatch(/disabled/i);
+        const handlers = setup();
+        for (const [name, args] of [
+            ["canvas_inspect", { udid: "U" }],
+            ["canvas_hittest", { udid: "U", x: 1, y: 2 }],
+            ["canvas_object_rect", { udid: "U", name: "close" }],
+        ]) {
+            const res = await handlers.get(name)(args);
+            expect(res.isError).toBe(true);
+            expect(res.content[0].text).toMatch(/disabled/i);
+        }
     });
     it("surfaces a resolveWebview failure as an actionable error", async () => {
         vi.spyOn(webview, "resolveWebview").mockResolvedValue({ ok: false, error: "no inspectable WebView found" });

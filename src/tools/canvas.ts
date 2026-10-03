@@ -11,6 +11,8 @@
  *   canvas_inspect  — list canvas objects (optionally filtered by selector)
  *   canvas_resolve  — rank objects against an intent (evidenced, fail-closed)
  *   canvas_tap      — resolve + tap the confident match (else fail closed)
+ *   canvas_hittest  — find the topmost object at canvas-local CSS coordinates
+ *   canvas_object_rect — read an object's canvas-local and screen rectangle
  *
  * No screenshots, no vision — the token-efficient path. Coordinates are mapped
  * the same way webview_inspect maps DOM elements: the bridge reports CSS px
@@ -27,7 +29,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { errorResult, okResult } from "../lib/result.js";
 import { resolveWebview, evalWebview } from "../lib/webview.js";
-import { buildCanvasBridgeScript, parseCanvasObjects } from "../lib/canvas-adapters.js";
+import { buildCanvasBridgeScript, parseCanvasObjects, parseCanvasRect } from "../lib/canvas-adapters.js";
 import { resolveIntent } from "../lib/canvas-resolver.js";
 import { nativeTap } from "../lib/gesture.js";
 import type { CanvasObject, CanvasSelectorKind } from "../lib/canvas-types.js";
@@ -55,35 +57,41 @@ interface CanvasSurface {
 
 type SurfaceResult = { ok: true; data: CanvasSurface } | { ok: false; error: string };
 
+interface CanvasQuery {
+  webviewId: string;
+  url: string;
+  framework: string;
+  value: unknown;
+  originX: number;
+  originY: number;
+}
+
+type QueryResult = { ok: true; data: CanvasQuery } | { ok: false; error: string };
+
 /**
- * Inject the bridge, run one inspect, and read back the canvas element's
- * viewport offset — all in a single eval round-trip. `selector` filters
- * in-page when provided (canvas_inspect); omit it to get every object
- * (canvas_resolve / canvas_tap, which rank client-side).
+ * Run one bridge query and read the canvas viewport offset in the same eval.
+ * Callers use the offset to report screen coordinates without a second lookup.
  */
-async function inspectCanvasSurface(
+async function queryCanvasSurface(
   udid: string,
   webviewId: string | undefined,
-  selector?: { kind: CanvasSelectorKind; value: string }
-): Promise<SurfaceResult> {
+  query: string
+): Promise<QueryResult> {
   const wv = await resolveWebview(udid, webviewId);
   if (!wv.ok) return wv;
 
-  const args = selector ? `${JSON.stringify(selector.kind)},${JSON.stringify(selector.value)}` : "";
-  // bridge install + inspect + largest-canvas viewport offset, serialized once.
   const expr =
     buildCanvasBridgeScript() +
-    ";(function(){var r=window.__podiumCanvas.inspect(" +
-    args +
-    ");var cs=document.getElementsByTagName('canvas'),b=null,ba=-1;" +
+    ";(function(){var value=" + query +
+    ";var cs=document.getElementsByTagName('canvas'),b=null,ba=-1;" +
     "for(var i=0;i<cs.length;i++){var a=cs[i].width*cs[i].height;if(a>ba){ba=a;b=cs[i];}}" +
     "var o=b?b.getBoundingClientRect():{left:0,top:0};" +
-    "return JSON.stringify({framework:r.framework,objects:r.objects,canvasLeft:o.left,canvasTop:o.top});})()";
+    "return JSON.stringify({framework:window.__podiumCanvas.framework,value:value,canvasLeft:o.left,canvasTop:o.top});})()";
 
   const ev = await evalWebview(udid, wv.data.id, expr);
   if (!ev.ok) return ev;
 
-  let parsed: { framework?: unknown; objects?: unknown; canvasLeft?: unknown; canvasTop?: unknown };
+  let parsed: { framework?: unknown; value?: unknown; canvasLeft?: unknown; canvasTop?: unknown };
   try {
     parsed = JSON.parse(ev.data) as typeof parsed;
   } catch {
@@ -93,7 +101,6 @@ async function inspectCanvasSurface(
     return { ok: false, error: `canvas bridge returned an invalid payload: ${ev.data.slice(0, 200)}` };
   }
 
-  const objects = parseCanvasObjects(parsed.objects);
   const framework = typeof parsed.framework === "string" ? parsed.framework : "unknown";
   const canvasLeft = Number(parsed.canvasLeft);
   const canvasTop = Number(parsed.canvasTop);
@@ -106,11 +113,27 @@ async function inspectCanvasSurface(
       webviewId: wv.data.id,
       url: wv.data.url,
       framework,
-      objects,
+      value: parsed.value,
       originX: bx + (Number.isFinite(canvasLeft) ? canvasLeft : 0),
       originY: by + (Number.isFinite(canvasTop) ? canvasTop : 0),
     },
   };
+}
+
+/** `selector` filters in-page; resolver and tap omit it to rank all objects. */
+async function inspectCanvasSurface(
+  udid: string,
+  webviewId: string | undefined,
+  selector?: { kind: CanvasSelectorKind; value: string }
+): Promise<SurfaceResult> {
+  const args = selector ? `${JSON.stringify(selector.kind)},${JSON.stringify(selector.value)}` : "";
+  const result = await queryCanvasSurface(udid, webviewId, `window.__podiumCanvas.inspect(${args})`);
+  if (!result.ok) return result;
+  const raw = result.data.value;
+  const objects = parseCanvasObjects(
+    raw && typeof raw === "object" && "objects" in raw ? raw.objects : undefined
+  );
+  return { ok: true, data: { ...result.data, objects } };
 }
 
 /** Shared "no objects" hint so a bare-canvas page gives an actionable message. */
@@ -226,6 +249,74 @@ export function registerCanvasTools(server: McpServer): void {
         screenX,
         screenY,
         backend: tap.backend,
+      });
+    }
+  );
+
+  server.tool(
+    "canvas_hittest",
+    "Finds the topmost canvas object at x/y in CSS pixels relative to the canvas top-left. " +
+      "Returns the hit and the queried point's absolute screen coordinates; never taps." + CANVAS_NOTE,
+    {
+      udid: z.string().describe("Simulator / device UDID"),
+      x: z.number().finite().describe("Canvas-local CSS pixel x coordinate"),
+      y: z.number().finite().describe("Canvas-local CSS pixel y coordinate"),
+      webviewId: z.string().optional().describe("Target WebView id. Omit to auto-select."),
+    },
+    async ({ udid, x, y, webviewId }) => {
+      if (process.env.PODIUM_DISABLE_WEBVIEW_EVAL === "1") return errorResult(EVAL_DISABLED);
+      const surface = await queryCanvasSurface(udid, webviewId, `window.__podiumCanvas.hitTest(${x},${y})`);
+      if (!surface.ok) return errorResult(surface.error);
+      const raw = surface.data.value;
+      const hit = raw === null ? null : parseCanvasObjects([raw])[0];
+      if (hit === undefined) return errorResult("canvas_hittest: bridge returned an invalid object.");
+      return okResult({
+        webviewId: surface.data.webviewId,
+        url: surface.data.url,
+        framework: surface.data.framework,
+        x,
+        y,
+        screenX: surface.data.originX + x,
+        screenY: surface.data.originY + y,
+        hit,
+        ...(hit === null
+          ? { hint: surface.data.framework === "unknown" ? emptyHint(surface.data.framework) : `no canvas object at (${x}, ${y}).` }
+          : {}),
+      });
+    }
+  );
+
+  server.tool(
+    "canvas_object_rect",
+    "Gets a named canvas object's bounding rectangle in canvas-local CSS pixels and absolute " +
+      "screen coordinates. Returns null when no named object has a rectangle; never taps." + CANVAS_NOTE,
+    {
+      udid: z.string().describe("Simulator / device UDID"),
+      name: z.string().min(1).describe("Exact canvas object name"),
+      webviewId: z.string().optional().describe("Target WebView id. Omit to auto-select."),
+    },
+    async ({ udid, name, webviewId }) => {
+      if (process.env.PODIUM_DISABLE_WEBVIEW_EVAL === "1") return errorResult(EVAL_DISABLED);
+      const surface = await queryCanvasSurface(udid, webviewId, `window.__podiumCanvas.objectRect(${JSON.stringify(name)})`);
+      if (!surface.ok) return errorResult(surface.error);
+      const raw = surface.data.value;
+      const rect = raw === null ? null : parseCanvasRect(raw);
+      if (rect === undefined) return errorResult("canvas_object_rect: bridge returned an invalid rectangle.");
+      return okResult({
+        webviewId: surface.data.webviewId,
+        url: surface.data.url,
+        framework: surface.data.framework,
+        name,
+        rect,
+        screenRect: rect && {
+          x: surface.data.originX + rect.x,
+          y: surface.data.originY + rect.y,
+          width: rect.width,
+          height: rect.height,
+        },
+        ...(rect === null
+          ? { hint: surface.data.framework === "unknown" ? emptyHint(surface.data.framework) : `no bounding rectangle found for "${name}".` }
+          : {}),
       });
     }
   );
